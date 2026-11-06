@@ -22,7 +22,7 @@ bash scripts/02-install-k3s.sh     # k3s (API 서버 플래그: service-account-
 # export KUBECTL_CMD="sudo kubectl --kubeconfig /etc/kubernetes/admin.conf" (JWKS는 API 서버에서 가져옴)
 bash scripts/03-publish-oidc.sh    # JWKS/discovery 업로드, 실제 토큰 iss/kid 대조
 bash scripts/05-federate.sh        # UAMI federated credential 생성
-bash scripts/06-deploy-demo.sh     # Namespace/SA/ConfigMap 배포 (webhook 없음)
+bash scripts/06-deploy-demo.sh     # Namespace/SA/ConfigMap 배포
 bash scripts/07-verify.sh          # 양성/음성 검증
 bash scripts/99-cleanup.sh         # 리소스 삭제
 ```
