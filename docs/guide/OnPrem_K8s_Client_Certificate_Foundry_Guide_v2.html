@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>온프레미스 Kubernetes → Client Certificate → Microsoft Foundry Models 호출 가이드</title>
+<style>
+:root{--blue:#0067b8;--ink:#172333;--muted:#526174;--line:#dce4ed}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:#f5f8fc;color:var(--ink);font:16px/1.75 "Segoe UI","Malgun Gothic",sans-serif;counter-reset:step}
+a{color:var(--blue);text-underline-offset:3px}.wrap{max-width:980px;margin:auto;padding:0 24px}
+header{background:linear-gradient(120deg,#fff,#e5f1ff);padding:42px 0 30px;border-bottom:1px solid var(--line)}
+.eyebrow{color:var(--blue);font-weight:700;font-size:13px;letter-spacing:.04em}h1{font-size:32px;line-height:1.3;margin:10px 0}
+.lead{color:var(--muted);margin:12px 0}
+.release-card{background:#fff;border:1px solid #c8dbf0;border-left:4px solid var(--blue);border-radius:12px;padding:18px 22px;margin-bottom:24px;font-size:14px}
+.release-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;font-size:11px;color:var(--muted)}
+.release-tag{background:#eaf6ec;color:#176b35;border-radius:16px;padding:3px 9px;font-weight:700}
+.release-title{font-size:18px;font-weight:700;line-height:1.5;margin:12px 0}
+.release-points{margin:10px 0}.release-points li{margin:5px 0}
+.release-footer{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 14px;border-top:1px solid var(--line);padding-top:10px;font-size:12px;color:var(--muted)}
+.architecture{margin:18px 0;background:#fff;border:1px solid #c8dbf0;border-radius:12px;padding:18px}
+.diagram-heading{margin:0 0 12px;font-size:16px;color:#245b8c}
+.zones{display:grid;grid-template-columns:minmax(0,1fr) 70px minmax(0,1.5fr);gap:10px;align-items:stretch}
+.zone{border-radius:11px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.zone-onprem{border:2px dashed #bb934c;background:#fff9ed}.zone-azure{border:1px solid #b8d2ed;background:#eef6ff}
+.zone-title{font-size:12px;font-weight:700}.zone-onprem .zone-title{color:#805f23}.zone-azure .zone-title{color:#245b8c}
+.arch-node{min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:12px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;text-align:center;overflow-wrap:anywhere}
+.arch-node strong{font-size:14px;line-height:1.4}.arch-node .meta{font-size:12px;line-height:1.5;color:var(--muted)}
+.node-entra{border-color:#0078d4}.node-foundry{background:#eefaf2;border-color:#8cc9a0}.node-issuer{background:#fdf6e8;border-color:#e3b877}
+.azure-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mid{display:flex;flex-direction:column;align-items:center;justify-content:center;color:#486782;font-size:11px;text-align:center;line-height:1.35;font-weight:700;gap:4px}
+.mid b{font-size:20px}
+.key-chip{font-size:11px;line-height:1.5;border:1px solid #c7d9ed;background:#eaf3ff;color:#24527f;border-radius:6px;padding:4px 7px;overflow-wrap:anywhere}
+.opt-chip{border-style:dashed;border-color:#bb934c;background:#fff9ed;color:#805f23}
+.architecture figcaption{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 16px;border-top:1px solid var(--line);margin-top:14px;padding-top:10px;font-size:11px;color:var(--muted)}
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}.badge{font-size:12px;padding:3px 10px;background:#fff;border:1px solid #c8dbf0;border-radius:20px}
+nav{display:flex;flex-wrap:wrap;gap:8px 18px;padding:22px 0;font-size:14px}nav a{text-decoration:none}nav a.core{font-weight:700;color:#7a4800}
+section{counter-increment:step;background:#fff;border:1px solid var(--line);border-radius:14px;padding:24px 28px;margin:0 0 18px;scroll-margin-top:18px}
+section.core{border:2px solid #e3b877;background:#fffdf8}
+section.lab{counter-increment:none;border:1px dashed #9aa7b5;background:#f9fbfd}
+h2{display:flex;align-items:center;flex-wrap:wrap;gap:10px 12px;font-size:21px;margin:0 0 14px;line-height:1.4}
+h2::before{content:counter(step,decimal-leading-zero);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:36px;height:36px;color:#fff;background:var(--blue);border-radius:9px;font-size:14px}
+section.core h2::before{background:#b36b00}
+section.lab h2::before{content:"랩";background:#6b7a8c}
+.tag-core{font-size:11px;font-weight:700;background:#fdf1e1;color:#7a4800;border:1px solid #e3b877;border-radius:999px;padding:0 8px;line-height:1.7;white-space:nowrap}
+.tag-where{font-size:11px;font-weight:700;border-radius:999px;padding:0 8px;line-height:1.7;white-space:nowrap}
+.w-onprem{background:#fff4de;color:#805f23;border:1px solid #e3b877}.w-azure{background:#e6f0fb;color:#0b4f8a;border:1px solid #9cc3ea}.w-both{background:#efeaf8;color:#4b2f86;border:1px solid #b9a6e0}
+h3{font-size:17px;line-height:1.5;margin:24px 0 10px}
+p{margin:12px 0}li{margin:8px 0}ol,ul{padding-left:22px}.note{background:#eef6ff;border-left:3px solid var(--blue);border-radius:4px;padding:10px 14px;font-size:14px;color:#34465d}
+.warn{background:#fff9ed;border-left:3px solid #bb934c;border-radius:4px;padding:10px 14px;font-size:14px;color:#6b4e17}
+.done{color:#176b35;font-weight:700;font-size:14px}.small{font-size:13px;color:var(--muted)}
+.unv{background:#f3f4f6;color:#4b5563;border:1px solid #cbd2da;border-radius:999px;font-size:11px;padding:0 8px;font-weight:700;white-space:nowrap}
+code{background:#edf2f8;border-radius:4px;padding:2px 5px;font:.9em Consolas,monospace;overflow-wrap:anywhere}
+details{border:1px solid var(--line);border-radius:9px;padding:10px 14px;margin:14px 0}summary{cursor:pointer;color:var(--blue);font-weight:600;font-size:14px}
+pre{background:#142033;color:#e8f0ff;white-space:pre;overflow:auto;max-height:420px;padding:42px 14px 14px;border-radius:8px;font:12px/1.65 Consolas,monospace}
+pre code{background:none;padding:0;color:inherit;overflow-wrap:normal}
+.code-wrap{position:relative}.copy{position:absolute;top:9px;right:9px;background:#344760;border:1px solid #6c8099;color:white;border-radius:5px;padding:3px 10px;cursor:pointer}
+.lang{position:absolute;top:11px;left:14px;color:#b3c8e2;font:700 10px sans-serif;text-transform:uppercase}
+table{border-collapse:collapse;width:100%;font-size:14px;margin:12px 0}td,th{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;overflow-wrap:anywhere}th{color:var(--muted);font-weight:600;width:30%}
+table.match th,table.match td{width:auto}table.match thead th{background:#f3f7fc;color:var(--ink)}
+footer{padding:20px 0 36px;font-size:12px;color:var(--muted)}footer a{margin-right:14px}
+@media(max-width:650px){.wrap{padding:0 16px}header{padding:28px 0 22px}h1{font-size:26px}section{padding:20px}h2{font-size:19px}.architecture{padding:14px}.zones{display:flex;flex-direction:column}.mid{flex-direction:row;min-height:30px}.azure-row{grid-template-columns:1fr}}
+@media print{details{break-inside:avoid}.copy{display:none}section{break-inside:avoid}body{background:white}}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+<aside class="release-card" aria-labelledby="release-title">
+<div class="release-meta"><span class="release-tag">랩 End-to-End 검증 완료</span><span>검증일: <time datetime="2026-11-06">2026-11-06</time></span><span>랩 리전: East US 2</span><span>Client Certificate</span></div>
+<div class="release-title" id="release-title">Entra 앱 등록의 <b>Client Certificate</b>로 온프레미스 Kubernetes 파드가 Microsoft Foundry 모델을 호출하는 구성을 단계별로 설명합니다.</div>
+<ul class="release-points">
+<li>핵심 메커니즘: 파드의 개인키로 client assertion(JWT) 서명 → Entra ID가 앱에 등록된 <b>공개 인증서</b>로 검증 → Foundry 액세스 토큰</li>
+<li>API Key·Client Secret은 쓰지 않으며, <b>개인키는 Kubernetes Secret으로 보관</b>되므로 개인키 보호가 핵심입니다</li>
+<li>동작 증명: Azure VM 1대의 k3s에서 양성·음성·갱신 테스트 통과 (섹션 05, 06)</li>
+</ul>
+<div class="release-footer"><span>저장소: <code>k8s_WIF_01</code> · <code>AUTH_MODE=cert</code></span><span>랩 모델: gpt-5.4-mini (GlobalStandard)</span></div>
+</aside>
+<div class="eyebrow">ON-PREMISES KUBERNETES · MICROSOFT ENTRA ID · MICROSOFT FOUNDRY</div>
+<h1>온프레미스 Kubernetes에서 Client Certificate로 Foundry Models 호출하기</h1>
+<p class="lead">Entra 앱 등록에 공개 인증서를 등록하고, 파드가 개인키로 서명해 Azure 액세스 토큰을 받아 Foundry 모델을 호출합니다.</p>
+<figure class="architecture" aria-labelledby="diagram-heading">
+<div class="diagram-heading" id="diagram-heading"><b>전체 구조</b></div>
+<div class="zones">
+<div class="zone zone-onprem"><div class="zone-title">온프레미스 (고객 데이터센터)</div>
+<div class="arch-node"><strong>Kubernetes 클러스터</strong><span class="meta">파드 + Secret 볼륨<br>Secret <code>wif-cert</code> = 개인키+인증서<br>파드가 Secret을 볼륨으로 마운트</span><span class="key-chip">AZURE_CLIENT_CERTIFICATE_PATH</span></div></div>
+<div class="mid"><b>→</b>① 서명된<br>assertion<br><b>←</b>② 토큰</div>
+<div class="zone zone-azure"><div class="zone-title">Azure / Microsoft Entra</div>
+<div class="azure-row">
+<div class="arch-node node-entra"><strong>Entra 앱 등록 + 서비스 주체</strong><span class="meta">등록된 것은 <b>공개 인증서</b>뿐</span></div>
+<div class="arch-node node-foundry"><strong>Foundry 모델</strong><span class="meta">disableLocalAuth=true<br>역할: Cognitive Services OpenAI User</span></div></div></div>
+</div>
+<figcaption><span>③ 파드는 Bearer 토큰으로 Foundry 호출</span><span>인증서 개인키 유출 = 만료 전까지 누구나 토큰 발급 가능</span></figcaption>
+</figure>
+<div class="badges"><span class="badge">API Key 없음</span><span class="badge">Client Secret 없음</span><span class="badge">개인키 Secret 저장 필요</span></div>
+</div></header>
+<div class="wrap">
+<nav><a href="#s2" class="core">01 인증서 구성(핵심)</a><a href="#s3">02 Azure 구성</a><a href="#s4">03 Kubernetes 구성</a><a href="#s5">04 앱 코드</a><a href="#s6">05 검증 결과</a><a href="#s7">06 갱신·보호</a></nav>
+
+<section id="s2" class="core"><h2>인증서 구성 <span class="tag-core">가장 중요</span><span class="tag-where w-both">양쪽</span></h2>
+<p>신뢰 관계는 <b>인증서 한 쌍</b>으로 성립합니다. 개인키는 파드에만, 공개 인증서는 Entra에만 있습니다.</p>
+<table><tr><th>구성 요소</th><td>위치 / 값</td></tr>
+<tr><th>개인키 + 인증서 (PEM)</th><td>Kubernetes Secret <code>wif-cert</code> → 파드 <code>/var/run/cert/cert.pem</code></td></tr>
+<tr><th>공개 인증서 (.crt)</th><td>Entra 앱 등록 → 인증서 및 비밀 (키 자격 증명)</td></tr>
+<tr><th>매칭 기준</th><td>assertion 헤더의 thumbprint(<code>x5t</code>)와 등록된 키의 일치 여부</td></tr>
+<tr><th>필수 환경변수</th><td><code>AZURE_CLIENT_ID</code>, <code>AZURE_TENANT_ID</code>, <code>AZURE_CLIENT_CERTIFICATE_PATH</code></td></tr></table>
+<h3>인증서 생성 (openssl, 자체 서명, RSA 2048, 3년)</h3>
+<div class="code-wrap"><span class="lang">bash</span><button class="copy">복사</button><pre><code>openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 1095 -subj "/CN=app-wif-cert" \  -keyout client.key -out client.crt\ncat client.key client.crt &gt; client.pem &amp;&amp; rm client.key\nopenssl x509 -in client.crt -noout -fingerprint -sha1   # thumbprint 확인
+# client.pem = 개인키 + 인증서 (파드용)   client.crt = 공개 인증서 (Entra 업로드용)</code></pre></div>
+<p class="warn">운영에서는 사내 CA 또는 Key Vault가 발급한 인증서를 사용하세요. 자체 서명도 Entra 키 자격 증명으로는 동작합니다(랩에서 검증).</p></section>
+
+<section id="s3"><h2>Azure 구성 <span class="tag-where w-azure">Azure</span></h2>
+<div class="code-wrap"><span class="lang">bash</span><button class="copy">복사</button><pre><code># 1) 앱 등록 + 서비스 주체
+APP_ID=$(az ad app create --display-name app-wif-cert --query appId -o tsv)
+az ad sp create --id $APP_ID
+
+# 2) 공개 인증서만 업로드
+az ad app credential reset --id $APP_ID --cert @client.crt --append
+
+# 3) Foundry 호출 권한 (Foundry 는 disableLocalAuth=true 로 키 차단)
+az role assignment create --assignee-object-id $(az ad sp show --id $APP_ID --query id -o tsv) \
+  --assignee-principal-type ServicePrincipal \
+  --role "Cognitive Services OpenAI User" --scope $FOUNDRY_ID</code></pre></div>
+<p class="small">자동화: <code>AUTH_MODE=cert bash scripts/01-azure-infra.sh</code> 후 <code>scripts/c1-create-app-cert.sh</code>.</p>
+<p class="note">앱 등록은 리소스 그룹 밖(테넌트)에 생성됩니다. 정리할 때 <code>az ad app delete</code>가 별도로 필요합니다(<code>99-cleanup.sh</code>가 처리).</p></section>
+
+<section id="s4"><h2>Kubernetes 구성 <span class="tag-where w-onprem">온프레미스</span></h2>
+<p>Secret 하나와 볼륨 마운트, 환경변수 3개면 충분합니다.</p>
+<div class="code-wrap"><span class="lang">bash</span><button class="copy">복사</button><pre><code>kubectl create namespace wif-demo
+kubectl -n wif-demo create secret generic wif-cert --from-file=cert.pem=client.pem</code></pre></div>
+<div class="code-wrap"><span class="lang">yaml</span><button class="copy">복사</button><pre><code>env:
+  - {name: AZURE_CLIENT_ID,   value: "&lt;앱 등록 appId&gt;"}
+  - {name: AZURE_TENANT_ID,   value: "&lt;테넌트 ID&gt;"}
+  - {name: AZURE_CLIENT_CERTIFICATE_PATH, value: /var/run/cert/cert.pem}
+volumeMounts:
+  - {name: cert, mountPath: /var/run/cert, readOnly: true}
+volumes:
+  - name: cert
+    secret: {secretName: wif-cert}</code></pre></div>
+<h3>테스트에 사용한 전체 매니페스트 (Deployment)</h3>
+<p>검증에 사용한 매니페스트입니다(<code>k8s/deploy-cert.yaml.tpl</code>).</p>
+<div class="code-wrap"><span class="lang">yaml</span><button class="copy">복사</button><pre><code>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cert-call
+  namespace: wif-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cert-call
+  template:
+    metadata:
+      labels:
+        app: cert-call
+    spec:
+      containers:
+        - name: demo
+          image: python:3.12-slim
+          command: ["sh", "-c", "pip install -q --disable-pip-version-check azure-identity openai &amp;&amp; python /app/demo_cert.py; sleep infinity"]
+          env:
+            - name: AZURE_CLIENT_ID
+              value: "&lt;앱 등록 appId&gt;"
+            - name: AZURE_TENANT_ID
+              value: "&lt;테넌트 ID&gt;"
+            - name: AZURE_CLIENT_CERTIFICATE_PATH
+              value: /var/run/cert/cert.pem
+            - name: FOUNDRY_ENDPOINT
+              value: "https://&lt;foundry 이름&gt;.openai.azure.com"
+            - name: FOUNDRY_DEPLOYMENT
+              value: "gpt-5.4-mini"
+            - name: TOKEN_RETRIES
+              value: "6"
+          volumeMounts:
+            - name: app
+              mountPath: /app
+            - name: cert
+              mountPath: /var/run/cert
+              readOnly: true
+      volumes:
+        - name: app
+          configMap:
+            name: cert-demo-app      # demo_cert.py 를 담은 ConfigMap
+        - name: cert
+          secret:
+            secretName: wif-cert     # 개인키+인증서 PEM</code></pre></div>
+<p class="small"><code>FOUNDRY_*</code>, <code>TOKEN_RETRIES</code>, ConfigMap, 끝의 <code>sleep infinity</code>(결과 로그 확인용)는 테스트 데모 앱용입니다. 실제 앱에는 인증서 관련 환경변수 3개, <code>cert</code> 볼륨 마운트, <code>cert</code> 볼륨만 필요합니다.</p>
+<p class="warn">Secret은 기본적으로 base64일 뿐입니다. etcd 암호화(<code>--secrets-encryption</code>)와 RBAC 최소화를 반드시 적용하세요.</p></section>
+
+<section id="s5"><h2>애플리케이션 코드 <span class="tag-where w-onprem">온프레미스</span></h2>
+<p>코드는 <code>DefaultAzureCredential</code>만 사용합니다. 환경변수에 인증서 경로가 있으면 <code>EnvironmentCredential</code>이 인증서 방식을 자동 선택합니다(단일 PEM에 개인키+인증서 포함).</p>
+<div class="code-wrap"><span class="lang">python</span><button class="copy">복사</button><pre><code>cred = DefaultAzureCredential()
+client = AzureOpenAI(azure_endpoint=ENDPOINT, api_version="2024-10-21",
+    azure_ad_token_provider=get_bearer_token_provider(cred, "https://cognitiveservices.azure.com/.default"))</code></pre></div></section>
+
+<section id="s6"><h2>검증 결과 <span class="tag-where w-both">E2E</span></h2>
+<p>Azure VM(k3s)에서 <code>scripts/c3-verify-cert.sh</code>를 실행했습니다.</p>
+<table class="match"><thead><tr><th>테스트</th><th>기대</th><th>실제 결과</th></tr></thead><tbody>
+<tr><td>양성: 등록된 인증서로 호출</td><td>모델 응답</td><td>✅ “안녕하세요! 반갑습니다.” (RESULT=OK)</td></tr>
+<tr><td>환경변수 감사</td><td>API Key/Client Secret 없음</td><td>✅ 없음 (<code>AZURE_*</code> 3개만)</td></tr>
+<tr><td>개인키 Secret 확인</td><td>Secret에 개인키 보관</td><td>✅ <code>secret/wif-cert</code> 존재 — 보호 대상</td></tr>
+<tr><td>음성 1: 미등록 인증서</td><td>Entra 거부</td><td>✅ <code>AADSTS700027</code> (key not found)</td></tr>
+<tr><td>음성 2: API Key 호출</td><td>401/403</td><td>✅ HTTP 401</td></tr></tbody></table>
+<p class="note">단위 테스트 20개 통과. 인증서는 openssl로 생성했고(3년), 검증 후 앱 등록과 리소스 그룹을 모두 삭제했습니다.</p></section>
+
+<section id="s7"><h2>인증서 갱신(회전) <span class="tag-where w-both">E2E 검증</span></h2>
+<p>Entra 앱 등록은 공개 인증서를 <b>여러 개 동시에 등록</b>할 수 있으므로, 새 인증서를 추가한 뒤 교체하고 옛 인증서를 삭제하면 무중단으로 갱신됩니다. 아래 절차는 <code>scripts/c4-rotate-cert.sh</code>로 실제 검증했습니다.</p>
+<div class="code-wrap"><span class="lang">bash</span><button class="copy">복사</button><pre><code># 1) 새 인증서 생성 (90일)
+bash scripts/lib/make_cert.sh app-wif-cert 90 .state/cert-new client
+
+# 2) Entra 에 추가 (반드시 --append: 없으면 기존 키가 모두 사라짐)
+OLD_KEY_ID=$(az ad app credential list --id $APP_ID --cert --query "[0].keyId" -o tsv)
+az ad app credential reset --id $APP_ID --cert @.state/cert-new/client.crt --append
+
+# 3) Secret 덮어쓰기 + 파드 재시작
+kubectl -n &lt;ns&gt; create secret generic wif-cert --from-file=cert.pem=.state/cert-new/client.pem \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n &lt;ns&gt; rollout restart deployment/&lt;name&gt;
+kubectl -n &lt;ns&gt; rollout status deployment/&lt;name&gt;
+
+# 4) 새 인증서로 호출 성공을 확인한 뒤 옛 키 삭제 (인증서 키는 --cert 필요)
+az ad app credential delete --id $APP_ID --cert --key-id $OLD_KEY_ID</code></pre></div>
+<table class="match"><thead><tr><th>단계</th><th>기대</th><th>실제 결과</th></tr></thead><tbody>
+<tr><td>기준선: 옛 인증서</td><td>호출 성공</td><td>✅ 성공</td></tr>
+<tr><td>새 인증서 추가(<code>--append</code>)</td><td>Entra에 2개 공존</td><td>✅ 인증서 2개 확인</td></tr>
+<tr><td>중복 기간: 옛 인증서 전용 파드</td><td>계속 성공</td><td>✅ 성공 (무중단 전환 가능)</td></tr>
+<tr><td>Secret 덮어쓰기 + <code>rollout restart</code></td><td>새 thumbprint로 호출 성공</td><td>✅ 성공</td></tr>
+<tr><td>옛 키 삭제</td><td>인증서 1개만 남음</td><td>✅ 1개</td></tr>
+<tr><td>삭제 후 옛 인증서</td><td>Entra 거부</td><td>✅ <code>AADSTS700027</code> (삭제 반영까지 약 30초 지연 관찰)</td></tr>
+<tr><td>삭제 후 새 인증서</td><td>계속 성공</td><td>✅ 성공</td></tr></tbody></table>
+<ul>
+<li><b>Secret 덮어쓰기</b>: 같은 이름의 Secret 데이터가 교체됩니다. 볼륨 마운트 파일은 kubelet이 자동 갱신하지만 앱이 시작 시 한 번만 읽을 수 있으므로 재시작을 권장합니다. <code>subPath</code> 마운트나 환경변수 주입은 자동 갱신되지 않습니다.</li>
+<li><b>수명</b>: 유출 영향 범위를 줄이려면 90일~1년 인증서와 자동 회전(cert-manager 등 사내 CA 연동)을 권장합니다. 갱신된 공개 인증서를 Entra에 올리는 작업은 별도 자동화가 필요합니다.</li></ul>
+<h3>개인키 보호 <span class="unv">미검증/참고용</span></h3>
+<ul>
+<li><b>Key Vault + CSI Driver</b>: Azure Arc 등으로 Key Vault에 접근 가능하면 개인키를 Secret 대신 Key Vault에서 마운트할 수 있습니다. 단 Key Vault 접근 자체에 또 다른 자격 증명이 필요한 순환 구조에 유의하세요.</li>
+<li><b>HSM/TPM</b>: 개인키를 추출 불가능하게 보관하려면 노드 TPM 또는 HSM 기반 서명 구성을 별도 검토하세요.</li></ul></section>
+
+<footer><span>저장소 <code>k8s_WIF_01</code></span></footer>
+</div>
+<script>document.querySelectorAll('.copy').forEach(b=>b.onclick=()=>{navigator.clipboard.writeText(b.parentElement.querySelector('code').innerText);b.textContent='복사됨';setTimeout(()=>b.textContent='복사',1200)})</script>
+</body></html>

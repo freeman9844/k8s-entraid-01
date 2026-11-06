@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>온프레미스 Kubernetes → Client Secret → Microsoft Foundry Models 호출 가이드</title>
+<style>
+:root{--blue:#0067b8;--ink:#172333;--muted:#526174;--line:#dce4ed}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:#f5f8fc;color:var(--ink);font:16px/1.75 "Segoe UI","Malgun Gothic",sans-serif;counter-reset:step}
+a{color:var(--blue);text-underline-offset:3px}.wrap{max-width:980px;margin:auto;padding:0 24px}
+header{background:linear-gradient(120deg,#fff,#e5f1ff);padding:42px 0 30px;border-bottom:1px solid var(--line)}
+.eyebrow{color:var(--blue);font-weight:700;font-size:13px;letter-spacing:.04em}h1{font-size:32px;line-height:1.3;margin:10px 0}
+.lead{color:var(--muted);margin:12px 0}
+.release-card{background:#fff;border:1px solid #c8dbf0;border-left:4px solid var(--blue);border-radius:12px;padding:18px 22px;margin-bottom:24px;font-size:14px}
+.release-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;font-size:11px;color:var(--muted)}
+.release-tag{background:#eaf6ec;color:#176b35;border-radius:16px;padding:3px 9px;font-weight:700}
+.release-title{font-size:18px;font-weight:700;line-height:1.5;margin:12px 0}
+.release-points{margin:10px 0}.release-points li{margin:5px 0}
+.release-footer{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 14px;border-top:1px solid var(--line);padding-top:10px;font-size:12px;color:var(--muted)}
+.architecture{margin:18px 0;background:#fff;border:1px solid #c8dbf0;border-radius:12px;padding:18px}
+.diagram-heading{margin:0 0 12px;font-size:16px;color:#245b8c}
+.zones{display:grid;grid-template-columns:minmax(0,1fr) 70px minmax(0,1.5fr);gap:10px;align-items:stretch}
+.zone{border-radius:11px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.zone-onprem{border:2px dashed #bb934c;background:#fff9ed}.zone-azure{border:1px solid #b8d2ed;background:#eef6ff}
+.zone-title{font-size:12px;font-weight:700}.zone-onprem .zone-title{color:#805f23}.zone-azure .zone-title{color:#245b8c}
+.arch-node{min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:12px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;text-align:center;overflow-wrap:anywhere}
+.arch-node strong{font-size:14px;line-height:1.4}.arch-node .meta{font-size:12px;line-height:1.5;color:var(--muted)}
+.node-entra{border-color:#0078d4}.node-foundry{background:#eefaf2;border-color:#8cc9a0}.node-issuer{background:#fdf6e8;border-color:#e3b877}
+.azure-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mid{display:flex;flex-direction:column;align-items:center;justify-content:center;color:#486782;font-size:11px;text-align:center;line-height:1.35;font-weight:700;gap:4px}
+.mid b{font-size:20px}
+.key-chip{font-size:11px;line-height:1.5;border:1px solid #c7d9ed;background:#eaf3ff;color:#24527f;border-radius:6px;padding:4px 7px;overflow-wrap:anywhere}
+.opt-chip{border-style:dashed;border-color:#bb934c;background:#fff9ed;color:#805f23}
+.architecture figcaption{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 16px;border-top:1px solid var(--line);margin-top:14px;padding-top:10px;font-size:11px;color:var(--muted)}
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}.badge{font-size:12px;padding:3px 10px;background:#fff;border:1px solid #c8dbf0;border-radius:20px}
+nav{display:flex;flex-wrap:wrap;gap:8px 18px;padding:22px 0;font-size:14px}nav a{text-decoration:none}nav a.core{font-weight:700;color:#7a4800}
+section{counter-increment:step;background:#fff;border:1px solid var(--line);border-radius:14px;padding:24px 28px;margin:0 0 18px;scroll-margin-top:18px}
+section.core{border:2px solid #e3b877;background:#fffdf8}
+section.lab{counter-increment:none;border:1px dashed #9aa7b5;background:#f9fbfd}
+h2{display:flex;align-items:center;flex-wrap:wrap;gap:10px 12px;font-size:21px;margin:0 0 14px;line-height:1.4}
+h2::before{content:counter(step,decimal-leading-zero);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:36px;height:36px;color:#fff;background:var(--blue);border-radius:9px;font-size:14px}
+section.core h2::before{background:#b36b00}
+section.lab h2::before{content:"랩";background:#6b7a8c}
+.tag-core{font-size:11px;font-weight:700;background:#fdf1e1;color:#7a4800;border:1px solid #e3b877;border-radius:999px;padding:0 8px;line-height:1.7;white-space:nowrap}
+.tag-where{font-size:11px;font-weight:700;border-radius:999px;padding:0 8px;line-height:1.7;white-space:nowrap}
+.w-onprem{background:#fff4de;color:#805f23;border:1px solid #e3b877}.w-azure{background:#e6f0fb;color:#0b4f8a;border:1px solid #9cc3ea}.w-both{background:#efeaf8;color:#4b2f86;border:1px solid #b9a6e0}
+h3{font-size:17px;line-height:1.5;margin:24px 0 10px}
+p{margin:12px 0}li{margin:8px 0}ol,ul{padding-left:22px}.note{background:#eef6ff;border-left:3px solid var(--blue);border-radius:4px;padding:10px 14px;font-size:14px;color:#34465d}
+.warn{background:#fff9ed;border-left:3px solid #bb934c;border-radius:4px;padding:10px 14px;font-size:14px;color:#6b4e17}
+.done{color:#176b35;font-weight:700;font-size:14px}.small{font-size:13px;color:var(--muted)}
+.unv{background:#f3f4f6;color:#4b5563;border:1px solid #cbd2da;border-radius:999px;font-size:11px;padding:0 8px;font-weight:700;white-space:nowrap}
+code{background:#edf2f8;border-radius:4px;padding:2px 5px;font:.9em Consolas,monospace;overflow-wrap:anywhere}
+details{border:1px solid var(--line);border-radius:9px;padding:10px 14px;margin:14px 0}summary{cursor:pointer;color:var(--blue);font-weight:600;font-size:14px}
+pre{background:#142033;color:#e8f0ff;white-space:pre;overflow:auto;max-height:420px;padding:42px 14px 14px;border-radius:8px;font:12px/1.65 Consolas,monospace}
+pre code{background:none;padding:0;color:inherit;overflow-wrap:normal}
+.code-wrap{position:relative}.copy{position:absolute;top:9px;right:9px;background:#344760;border:1px solid #6c8099;color:white;border-radius:5px;padding:3px 10px;cursor:pointer}
+.lang{position:absolute;top:11px;left:14px;color:#b3c8e2;font:700 10px sans-serif;text-transform:uppercase}
+table{border-collapse:collapse;width:100%;font-size:14px;margin:12px 0}td,th{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;overflow-wrap:anywhere}th{color:var(--muted);font-weight:600;width:30%}
+table.match th,table.match td{width:auto}table.match thead th{background:#f3f7fc;color:var(--ink)}
+footer{padding:20px 0 36px;font-size:12px;color:var(--muted)}footer a{margin-right:14px}
+@media(max-width:650px){.wrap{padding:0 16px}header{padding:28px 0 22px}h1{font-size:26px}section{padding:20px}h2{font-size:19px}.architecture{padding:14px}.zones{display:flex;flex-direction:column}.mid{flex-direction:row;min-height:30px}.azure-row{grid-template-columns:1fr}}
+@media print{details{break-inside:avoid}.copy{display:none}section{break-inside:avoid}body{background:white}}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+<aside class="release-card" aria-labelledby="release-title">
+<div class="release-meta"><span class="release-tag">랩 End-to-End 검증 완료</span><span>검증일: <time datetime="2026-11-06">2026-11-06</time></span><span>랩 리전: East US 2</span><span>Client Secret</span></div>
+<div class="release-title" id="release-title">Entra 앱 등록의 <b>Client Secret</b>으로 온프레미스 Kubernetes 파드가 Microsoft Foundry 모델을 호출하는 구성을 단계별로 설명합니다.</div>
+<ul class="release-points">
+<li>핵심 메커니즘: 파드가 앱 ID + Client Secret으로 Entra ID에 토큰을 요청 → Foundry 액세스 토큰 발급</li>
+<li>Foundry API Key는 쓰지 않으며, <b>Client Secret은 Kubernetes Secret으로 보관</b>되므로 비밀 문자열 보호가 핵심입니다</li>
+<li>동작 증명: Azure VM 1대의 k3s에서 양성·음성 테스트 통과 (섹션 05)</li>
+</ul>
+<div class="release-footer"><span>저장소: <code>k8s_WIF_01</code></span><span>랩 모델: gpt-5.4-mini (GlobalStandard)</span></div>
+</aside>
+<div class="eyebrow">ON-PREMISES KUBERNETES · MICROSOFT ENTRA ID · MICROSOFT FOUNDRY</div>
+<h1>온프레미스 Kubernetes에서 Client Secret으로 Foundry Models 호출하기</h1>
+<p class="lead">Entra 앱 등록에서 Client Secret을 발급해 Kubernetes Secret에 저장하고, 파드가 이를 환경변수로 받아 Azure 액세스 토큰을 얻은 뒤 Foundry 모델을 호출합니다.</p>
+<figure class="architecture" aria-labelledby="diagram-heading">
+<div class="diagram-heading" id="diagram-heading"><b>전체 구조</b></div>
+<div class="zones">
+<div class="zone zone-onprem"><div class="zone-title">온프레미스 (고객 데이터센터)</div>
+<div class="arch-node"><strong>Kubernetes 클러스터</strong><span class="meta">Secret <code>wif-secret</code> = Client Secret<br>파드가 secretKeyRef로 환경변수 주입</span><span class="key-chip">AZURE_CLIENT_SECRET</span></div></div>
+<div class="mid"><b>→</b>① 앱 ID +<br>Secret<br><b>←</b>② 토큰</div>
+<div class="zone zone-azure"><div class="zone-title">Azure / Microsoft Entra</div>
+<div class="azure-row">
+<div class="arch-node node-entra"><strong>Entra 앱 등록 + 서비스 주체</strong><span class="meta">Client Secret(해시) 등록<br>유효기간 1년</span></div>
+<div class="arch-node node-foundry"><strong>Foundry 모델</strong><span class="meta">disableLocalAuth=true<br>역할: Cognitive Services OpenAI User</span></div></div></div>
+</div>
+<figcaption><span>③ 파드는 액세스 토큰으로 Foundry 호출</span><span>Secret 값 유출 = 만료 전까지 누구나 토큰 발급 가능</span></figcaption>
+</figure>
+<div class="badges"><span class="badge">Foundry API Key 없음</span><span class="badge">인증서 없음</span><span class="badge">Client Secret 저장 필요</span></div>
+</div></header>
+<div class="wrap">
+<nav><a href="#s2" class="core">01 Client Secret 구성(핵심)</a><a href="#s3">02 Azure 구성</a><a href="#s4">03 Kubernetes 구성</a><a href="#s5">04 앱 코드</a><a href="#s6">05 검증 결과</a><a href="#s7">06 갱신·보호</a></nav>
+
+<section id="s2" class="core"><h2>Client Secret 구성 <span class="tag-core">가장 중요</span><span class="tag-where w-both">양쪽</span></h2>
+<p>신뢰 관계는 <b>앱 ID + Client Secret 값</b>으로 성립합니다. Entra는 Secret의 해시만 보관하고, 원문은 발급 시점에 한 번만 보여 줍니다.</p>
+<table><tr><th>구성 요소</th><td>위치 / 값</td></tr>
+<tr><th>Client Secret 값</th><td>Kubernetes Secret <code>wif-secret</code> (key: <code>client-secret</code>) → 파드 환경변수 <code>AZURE_CLIENT_SECRET</code></td></tr>
+<tr><th>앱 등록 / 서비스 주체</th><td>Entra ID. 서비스 주체에 Foundry 역할 부여</td></tr>
+<tr><th>유효기간</th><td>발급 시 지정(랩: 1년). 만료되면 인증 실패</td></tr>
+<tr><th>필수 환경변수</th><td><code>AZURE_CLIENT_ID</code>, <code>AZURE_TENANT_ID</code>, <code>AZURE_CLIENT_SECRET</code></td></tr></table>
+<p class="warn">Secret 값을 코드, 이미지, Git, 로그에 남기지 마세요. 랩 스크립트도 값을 출력하지 않고 <code>.state</code> 파일에만 저장했습니다.</p></section>
+
+<section id="s3"><h2>Azure 구성 <span class="tag-where w-azure">Azure</span></h2>
+<div class="code-wrap"><span class="lang">bash</span><button class="copy">복사</button><pre><code># 1) 앱 등록 + 서비스 주체
+APP_ID=$(az ad app create --display-name app-wif-secret --query appId -o tsv)
+az ad sp create --id $APP_ID
+
+# 2) Client Secret 발급 (값은 이 시점에만 확인 가능)
+SECRET=$(az ad app credential reset --id $APP_ID --append --display-name demo --years 1 --query password -o tsv)
+
+# 3) Foundry 호출 권한 (Foundry 는 disableLocalAuth=true 로 API Key 차단)
+az role assignment create --assignee-object-id $(az ad sp show --id $APP_ID --query id -o tsv) \
+  --assignee-principal-type ServicePrincipal \
+  --role "Cognitive Services OpenAI User" --scope $FOUNDRY_ID</code></pre></div>
+<p class="small">자동화: <code>scripts/s1-create-app-secret.sh</code>. <code>--append</code>를 빼면 앱의 기존 자격 증명이 모두 교체됩니다.</p>
+<p class="note">앱 등록은 리소스 그룹 밖(테넌트)에 생성됩니다. 정리할 때 <code>az ad app delete</code>가 별도로 필요합니다(<code>99-cleanup.sh</code>가 처리).</p></section>
+
+<section id="s4"><h2>Kubernetes 구성 <span class="tag-where w-onprem">온프레미스</span></h2>
+<div class="code-wrap"><span class="lang">bash</span><button class="copy">복사</button><pre><code>kubectl create namespace wif-demo
+kubectl -n wif-demo create secret generic wif-secret --from-literal=client-secret="$SECRET"</code></pre></div>
+<div class="code-wrap"><span class="lang">yaml</span><button class="copy">복사</button><pre><code>env:
+  - {name: AZURE_CLIENT_ID, value: "&lt;앱 등록 appId&gt;"}
+  - {name: AZURE_TENANT_ID, value: "&lt;테넌트 ID&gt;"}
+  - name: AZURE_CLIENT_SECRET
+    valueFrom:
+      secretKeyRef: {name: wif-secret, key: client-secret}</code></pre></div>
+<p><code>env</code>는 컨테이너 항목 안에 넣습니다.</p>
+<h3>테스트에 사용한 전체 매니페스트 (Deployment)</h3>
+<p>검증에 사용한 매니페스트입니다(<code>k8s/deploy-secret.yaml.tpl</code>).</p>
+<div class="code-wrap"><span class="lang">yaml</span><button class="copy">복사</button><pre><code>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: secret-call
+  namespace: wif-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: secret-call
+  template:
+    metadata:
+      labels:
+        app: secret-call
+    spec:
+      containers:
+        - name: demo
+          image: python:3.12-slim
+          command: ["sh", "-c", "pip install -q --disable-pip-version-check azure-identity openai &amp;&amp; python /app/demo_secret.py; sleep infinity"]
+          env:
+            - name: AZURE_CLIENT_ID
+              value: "&lt;앱 등록 appId&gt;"
+            - name: AZURE_TENANT_ID
+              value: "&lt;테넌트 ID&gt;"
+            - name: AZURE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: wif-secret
+                  key: client-secret
+            - name: FOUNDRY_ENDPOINT
+              value: "https://&lt;foundry 이름&gt;.openai.azure.com"
+            - name: FOUNDRY_DEPLOYMENT
+              value: "gpt-5.4-mini"
+            - name: TOKEN_RETRIES
+              value: "6"
+          volumeMounts:
+            - name: app
+              mountPath: /app
+      volumes:
+        - name: app
+          configMap:
+            name: secret-demo-app   # demo_secret.py 를 담은 ConfigMap</code></pre></div>
+<p class="small"><code>FOUNDRY_*</code>, <code>TOKEN_RETRIES</code>(Entra 전파 대기용 토큰 요청 재시도 횟수), ConfigMap, 끝의 <code>sleep infinity</code>(결과 로그 확인용)는 테스트 데모 앱용입니다. 실제 앱에는 환경변수 3개만 필요합니다.</p>
+<p class="warn">Kubernetes Secret은 기본적으로 base64일 뿐입니다. etcd 암호화(<code>--secrets-encryption</code>)와 Secret 읽기 RBAC 최소화를 반드시 적용하세요.</p></section>
+
+<section id="s5"><h2>애플리케이션 코드 <span class="tag-where w-onprem">온프레미스</span></h2>
+<p>코드는 <code>DefaultAzureCredential</code>만 사용합니다. 환경변수 3개가 있으면 <code>EnvironmentCredential</code>이 Client Secret 방식을 자동 선택합니다.</p>
+<div class="code-wrap"><span class="lang">python</span><button class="copy">복사</button><pre><code>cred = DefaultAzureCredential()
+client = AzureOpenAI(azure_endpoint=ENDPOINT, api_version="2024-10-21",
+    azure_ad_token_provider=get_bearer_token_provider(cred, "https://cognitiveservices.azure.com/.default"))</code></pre></div></section>
+
+<section id="s6"><h2>검증 결과 <span class="tag-where w-both">E2E</span></h2>
+<p>Azure VM(k3s)에서 <code>scripts/s3-verify-secret.sh</code>를 실행했습니다.</p>
+<table class="match"><thead><tr><th>테스트</th><th>기대</th><th>실제 결과</th></tr></thead><tbody>
+<tr><td>양성: Client Secret으로 호출</td><td>모델 응답</td><td>✅ “안녕하세요!” (RESULT=OK)</td></tr>
+<tr><td>환경변수 감사</td><td>Foundry API Key 없음</td><td>✅ 없음 (<code>AZURE_*</code> 3개, Secret 값은 길이만 표시)</td></tr>
+<tr><td>Secret 평문 노출 확인</td><td>Secret 읽기 권한자는 값을 복원 가능</td><td>✅ base64 디코딩만으로 40자 값 복원 가능 — 보호 대상</td></tr>
+<tr><td>음성 1: 잘못된 Client Secret</td><td>Entra 거부</td><td>✅ <code>AADSTS7000215</code> (Invalid client secret)</td></tr>
+<tr><td>음성 2: Foundry API Key 호출</td><td>401/403</td><td>✅ HTTP 401</td></tr></tbody></table>
+<p class="note">단위 테스트 20개 통과. 검증 후 앱 등록과 리소스 그룹을 모두 삭제했습니다.</p></section>
+
+<section id="s7"><h2>갱신과 보호 <span class="unv">미검증/참고용</span></h2>
+<ul>
+<li><b>갱신</b>: 앱 등록에는 Client Secret을 여러 개 등록할 수 있습니다. 새 Secret을 <code>--append</code>로 발급 → Kubernetes Secret 덮어쓰기 → <code>rollout restart</code> → 새 Secret으로 호출 확인 후 옛 Secret 삭제(<code>az ad app credential delete --id $APP_ID --key-id &lt;keyId&gt;</code>) 순서로 무중단 교체합니다. 이번 랩에서는 갱신 절차를 인증서 방식으로만 검증했습니다.</li>
+<li><b>만료 관리</b>: Secret은 만료되면 즉시 인증이 실패합니다. 만료일을 모니터링하고 짧은 수명(예: 90일~1년)과 자동 교체를 구성하세요.</li>
+<li><b>Key Vault</b>: 가능하면 Secret 값을 Key Vault에 두고 CSI Driver로 마운트하세요. 단 Key Vault 접근에 필요한 자격 증명은 별도로 보호해야 합니다.</li>
+<li><b>접근 통제</b>: <code>get secret</code> 권한과 <code>exec</code> 권한을 최소화하고, etcd 암호화와 감사 로그를 켜세요.</li></ul></section>
+
+<footer><span>저장소 <code>k8s_WIF_01</code></span></footer>
+</div>
+<script>document.querySelectorAll('.copy').forEach(b=>b.onclick=()=>{navigator.clipboard.writeText(b.parentElement.querySelector('code').innerText);b.textContent='복사됨';setTimeout(()=>b.textContent='복사',1200)})</script>
+</body></html>
