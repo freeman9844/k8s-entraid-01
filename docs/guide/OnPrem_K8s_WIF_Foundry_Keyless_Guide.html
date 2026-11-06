@@ -42,7 +42,6 @@ section.lab{counter-increment:none;border:1px dashed #9aa7b5;background:#f9fbfd}
 h2{display:flex;align-items:center;flex-wrap:wrap;gap:10px 12px;font-size:21px;margin:0 0 14px;line-height:1.4}
 h2::before{content:counter(step,decimal-leading-zero);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:36px;height:36px;color:#fff;background:var(--blue);border-radius:9px;font-size:14px}
 section.core h2::before{background:#b36b00}
-section.lab h2::before{content:"랩";background:#6b7a8c}
 .tag-core{font-size:11px;font-weight:700;background:#fdf1e1;color:#7a4800;border:1px solid #e3b877;border-radius:999px;padding:0 8px;line-height:1.7;white-space:nowrap}
 .tag-where{font-size:11px;font-weight:700;border-radius:999px;padding:0 8px;line-height:1.7;white-space:nowrap}
 .w-onprem{background:#fff4de;color:#805f23;border:1px solid #e3b877}.w-azure{background:#e6f0fb;color:#0b4f8a;border:1px solid #9cc3ea}.w-both{background:#efeaf8;color:#4b2f86;border:1px solid #b9a6e0}
@@ -71,7 +70,7 @@ footer{padding:20px 0 36px;font-size:12px;color:var(--muted)}footer a{margin-rig
 <div class="release-title" id="release-title">온프레미스에 있는 Kubernetes 파드가 API Key·Client Secret·인증서 없이 Microsoft Foundry 모델을 호출하는 구성을 단계별로 설명합니다.</div>
 <ul class="release-points">
 <li>핵심 메커니즘: Kubernetes ServiceAccount 토큰 → Microsoft Entra ID <b>Workload Identity Federation(WIF)</b> → Foundry 호출</li>
-<li>동작 증명: Azure VM 1대의 k3s를 “온프레미스 대역”으로 두고 양성·음성 테스트를 모두 통과 (부록 A)</li>
+<li>동작 증명: Azure VM 1대의 kubeadm 클러스터를 “온프레미스 대역”으로 두고 end-to-end 검증</li>
 </ul>
 <div class="release-footer"><span>저장소: <code>k8s_WIF_01</code></span><span>랩 모델: gpt-5.4-mini (GlobalStandard)</span></div>
 </aside>
@@ -82,7 +81,7 @@ footer{padding:20px 0 36px;font-size:12px;color:var(--muted)}footer a{margin-rig
 <div class="diagram-heading" id="diagram-heading"><b>전체 구조</b></div>
 <div class="zones">
 <div class="zone zone-onprem"><div class="zone-title">온프레미스 (고객 데이터센터)</div>
-<div class="arch-node"><strong>Kubernetes 클러스터</strong><span class="meta">API 서버 issuer 설정<br>Workload Identity webhook<br>파드 + SA <code>wif-sa</code></span><span class="key-chip">Secret 0개 · 키 없음</span></div>
+<div class="arch-node"><strong>Kubernetes 클러스터</strong><span class="meta">API 서버 issuer 플래그 1개<br>projected SA 토큰 볼륨(webhook 없음)<br>파드 + SA <code>wif-sa</code></span><span class="key-chip">Secret 0개 · 키 없음</span></div>
 <div class="arch-node"><strong>서명 키 (개인키)</strong><span class="meta">API 서버 안에만 존재</span></div></div>
 <div class="mid"><b>→</b>① SA 토큰<br>제시<br><b>←</b>② Entra<br>토큰<br><b>→</b>③ 모델<br>호출</div>
 <div class="zone zone-azure"><div class="zone-title">Azure / Microsoft 클라우드 (인터넷 경유 또는 ExpressRoute·VPN)</div>
@@ -93,10 +92,10 @@ footer{padding:20px 0 36px;font-size:12px;color:var(--muted)}footer a{margin-rig
 </div>
 <figcaption><span>방화벽: 클러스터에서 <b>밖으로(egress)</b> Entra·Foundry 443만 필요, 클러스터로 들어오는 인바운드는 불필요</span><span>Entra가 접속하는 곳은 클러스터가 아니라 <b>issuer 호스팅</b>입니다</span></figcaption>
 </figure>
-<div class="badges"><span class="badge">온프레미스 Kubernetes (k3s · kubeadm · RKE2 등)</span><span class="badge">Azure Workload Identity webhook</span><span class="badge">DefaultAzureCredential</span><span class="badge">API Key 비활성</span></div>
+<div class="badges"><span class="badge">온프레미스 Kubernetes (kubeadm)</span><span class="badge">API 서버 플래그 1개 · webhook 없음</span><span class="badge">DefaultAzureCredential</span><span class="badge">API Key 비활성</span></div>
 </div></header>
 <main class="wrap">
-<nav aria-label="진행 순서"><a href="#easy-start">먼저 읽기</a><a href="#wif-map" class="core">★ WIF 신뢰 체인</a><a href="#s1">01 사전 요건</a><a href="#s2">02 Azure 준비</a><a href="#s3" class="core">03 클러스터 issuer</a><a href="#s4" class="core">04 OIDC 공개</a><a href="#s5" class="core">05 Webhook</a><a href="#s6" class="core">06 Federated credential</a><a href="#s7">07 워크로드</a><a href="#s8">08 검증</a><a href="#s9" class="core">09 WIF 점검</a><a href="#s10">10 운영 고려</a><a href="#labA">부록 A 랩</a><a href="#trouble">문제 해결</a></nav>
+<nav aria-label="진행 순서"><a href="#easy-start">먼저 읽기</a><a href="#wif-map" class="core">★ WIF 신뢰 체인</a><a href="#s1">01 사전 요건</a><a href="#s2">02 Azure 준비</a><a href="#s3" class="core">03 클러스터 issuer</a><a href="#s4" class="core">04 OIDC 공개</a><a href="#s5" class="core">05 토큰 주입</a><a href="#s6" class="core">06 Federated credential</a><a href="#s7">07 워크로드</a><a href="#s9" class="core">09 WIF 점검</a><a href="#s10">10 운영 고려</a><a href="#trouble">문제 해결</a></nav>
 
 <aside class="release-card" aria-labelledby="easy-start">
 <h3 id="easy-start">먼저 읽기: 무엇을 만들고, 왜 필요한가요?</h3>
@@ -106,13 +105,13 @@ footer{padding:20px 0 36px;font-size:12px;color:var(--muted)}footer a{margin-rig
 <tr><th>OIDC Issuer</th><td>“이 토큰은 내 클러스터가 서명했다”를 증명하는 공개 주소. Entra가 여기서 discovery 문서와 JWKS(공개키)를 읽음</td></tr>
 <tr><th>UAMI (사용자 할당 관리 ID)</th><td>파드가 가장하게 될 Azure 쪽 ID. Foundry 권한을 가짐. VM이나 클러스터에 붙이는 것이 아니라 <b>federated credential의 대상</b>일 뿐임</td></tr>
 <tr><th>Federated credential</th><td>UAMI에 붙이는 신뢰 규칙. issuer + subject + audience가 모두 일치하는 토큰만 교환</td></tr>
-<tr><th>Workload Identity webhook</th><td>라벨이 붙은 파드에 SA 토큰과 <code>AZURE_*</code> 환경변수를 자동 주입. 앱은 <code>DefaultAzureCredential</code>만 호출</td></tr></table>
+<tr><th>Projected SA 토큰</th><td>파드 매니페스트의 <code>serviceAccountToken</code> 볼륨. audience를 <code>api://AzureADTokenExchange</code>로 지정한 짧은 수명 토큰을 kubelet이 파일로 넣고 갱신함. 앱은 <code>DefaultAzureCredential</code>만 호출</td></tr></table>
 <h3>검증 범위</h3>
 <table><tr><th>구분</th><td>상태</td></tr>
-<tr><th>WIF 전 구간(03~08), Foundry keyless 호출, 음성 테스트</th><td><b>랩에서 실제 실행해 검증</b> (부록 A: Azure VM의 k3s를 온프레미스로 간주)</td></tr>
-<tr><th>k3s 설정 방법, issuer 공개, webhook, federated credential</th><td>랩에서 검증한 명령 그대로 사용 가능</td></tr>
-<tr><th>kubeadm·RKE2 설정, <code>kubectl get --raw</code>로 JWKS 추출, 기존 클러스터 issuer 전환</th><td><span class="unv">참고용 · 미검증</span> 해당 배포판에서 파일 경로와 재시작 방식을 확인하고 먼저 테스트 클러스터에 적용하세요</td></tr></table>
-<p class="note"><b>비용:</b> Foundry 모델 호출과 issuer 호스팅(Storage 등)에 비용이 발생합니다. 랩은 부록 A의 정리 스크립트로 삭제하세요.</p>
+<tr><th>WIF 전 구간(03~07), Foundry keyless 호출, 음성 테스트</th><td><b>랩에서 실제 실행해 검증</b> (Azure VM의 kubeadm 클러스터를 온프레미스로 간주). 클러스터 변경은 <b>API 서버 플래그 1개</b>이며 webhook은 설치하지 않음</td></tr>
+<tr><th>kubeadm 설정 방법, issuer 공개, projected 토큰 매니페스트, federated credential</th><td>랩에서 검증한 명령 그대로 사용 가능</td></tr>
+<tr><th><code>kubeadm upgrade</code> 후 플래그 유지, HA 컨트롤 플레인 적용</th><td><span class="unv">참고용 · 미검증</span> 먼저 테스트 클러스터에 적용하세요</td></tr></table>
+<p class="note"><b>비용:</b> Foundry 모델 호출과 issuer 호스팅(Storage 등)에 비용이 발생합니다. 랩 리소스는 사용 후 리소스 그룹을 삭제하세요.</p>
 </aside>
 
 <aside class="release-card" aria-labelledby="wif-map" style="border-left-color:#b36b00;background:#fffdf8">
@@ -121,16 +120,16 @@ footer{padding:20px 0 36px;font-size:12px;color:var(--muted)}footer a{margin-rig
 <table class="match"><thead><tr><th>값</th><th>토큰이 가진 값 (온프레미스 클러스터 발급)</th><th>Entra에 등록한 값 (federated credential)</th><th>설정 단계</th></tr></thead>
 <tr><td><b>Issuer</b></td><td>클레임 <code>iss</code> = API 서버 <code>--service-account-issuer</code></td><td><code>issuer</code></td><td>3단계 ↔ 6단계</td></tr>
 <tr><td><b>Subject</b></td><td>클레임 <code>sub</code> = <code>system:serviceaccount:&lt;네임스페이스&gt;:&lt;SA 이름&gt;</code></td><td><code>subject</code></td><td>7단계 ↔ 6단계</td></tr>
-<tr><td><b>Audience</b></td><td>클레임 <code>aud</code> = <code>api://AzureADTokenExchange</code> (webhook이 주입)</td><td><code>audiences</code></td><td>5단계 ↔ 6단계</td></tr>
+<tr><td><b>Audience</b></td><td>클레임 <code>aud</code> = <code>api://AzureADTokenExchange</code> (파드 매니페스트의 projected 볼륨이 지정)</td><td><code>audiences</code></td><td>5단계 ↔ 6단계</td></tr>
 <tr><td><b>서명 키</b></td><td>헤더 <code>kid</code> + RS256 서명 (클러스터 개인키)</td><td>Entra가 <code>issuer/.well-known/openid-configuration</code> → <code>jwks_uri</code>에서 가져온 공개키</td><td>3단계 ↔ 4단계</td></tr></table>
-<p class="small">추가로 파드는 UAMI client ID(ServiceAccount 어노테이션)와 테넌트 ID를 알아야 하고, UAMI는 Foundry에 RBAC 권한을 가져야 합니다(2단계).</p>
+<p class="small">추가로 파드는 UAMI client ID와 테넌트 ID(매니페스트의 환경변수)를 알아야 하고, UAMI는 Foundry에 RBAC 권한을 가져야 합니다(2단계).</p>
 </aside>
 
 <section id="s1"><h2>사전 요건 <span class="tag-where w-both">온프레미스 + Azure</span></h2>
 <table><tr><th>구분</th><td>요구 사항</td></tr>
 <tr><th>클러스터</th><td>Kubernetes 1.21 이상 권장(ServiceAccount 토큰 projection·OIDC discovery 지원). <b>API 서버 플래그를 수정하고 재시작할 권한</b>이 필요</td></tr>
 <tr><th>Azure 권한</th><td>UAMI·Foundry·Storage를 만들 구독의 <b>Owner</b> (또는 리소스 생성 + 역할 할당 + federated credential 생성 권한)</td></tr>
-<tr><th>도구</th><td>Azure CLI, kubectl, helm, Python 3(랩 스크립트 사용 시), curl</td></tr></table>
+<tr><th>도구</th><td>Azure CLI, kubectl, Python 3(랩 스크립트 사용 시), curl</td></tr></table>
 <h3>네트워크 요건</h3>
 <table class="match"><thead><tr><th>방향</th><th>대상</th><th>목적</th></tr></thead>
 <tr><td>클러스터 → 인터넷(egress 443)</td><td><code>login.microsoftonline.com</code></td><td>토큰 교환 (파드의 SDK가 호출)</td></tr>
@@ -140,8 +139,7 @@ footer{padding:20px 0 36px;font-size:12px;color:var(--muted)}footer a{margin-rig
 <p class="note">프록시/방화벽이 egress를 제한하는 환경이라면 위 두 호스트를 허용 목록에 추가하세요. Foundry를 Private Endpoint로만 열었다면 ExpressRoute/VPN과 사설 DNS 경로가 따로 필요합니다(10단계).</p>
 <div class="code-wrap"><pre data-lang="bash"><code>az login
 az account set --subscription "&lt;구독 이름 또는 ID&gt;"
-kubectl version
-helm version</code></pre></div>
+kubectl version</code></pre></div>
 <p class="done">완료 기준: 클러스터 관리자 권한으로 <code>kubectl get nodes</code>가 되고 <code>az account show</code>가 대상 구독을 표시합니다.</p>
 </section>
 
@@ -175,34 +173,51 @@ ISSUER_URL=$(az storage account show -g $RG -n stwif$SUFFIX --query primaryEndpo
 
 <section id="s3" class="core"><h2>클러스터 API 서버에 OIDC issuer 지정 <span class="tag-core">WIF 핵심 ①</span> <span class="tag-where w-onprem">온프레미스</span></h2>
 <p><b>왜 하나요?</b> 클러스터가 발급하는 ServiceAccount 토큰의 <code>iss</code>가 Entra가 접근할 수 있는 공개 URL이 되게 합니다. 기본값(<code>https://kubernetes.default.svc.cluster.local</code> 등)은 외부에서 접근할 수 없어 WIF가 성립하지 않습니다.</p>
-<table><tr><th><code>--service-account-issuer</code></th><td>토큰 <code>iss</code> 값. 6단계 federated credential의 <code>issuer</code>와 <b>완전히 같아야</b> 함</td></tr>
-<tr><th><code>--service-account-jwks-uri</code></th><td>API 서버가 discovery 문서에 노출하는 JWKS 위치. 4단계에서 이 주소에 파일이 올라가도록 <code>$ISSUER_URL/openid/v1/jwks</code>로 지정</td></tr></table>
-<h3>k3s <span class="tag-core" style="background:#eaf6ec;color:#176b35;border-color:#9fd2ae">랩 검증</span></h3>
-<p><code>/etc/rancher/k3s/config.yaml</code>에 아래를 넣고 <b>k3s 설치 전에</b> 배치합니다(설치 후 변경이면 <code>systemctl restart k3s</code>).</p>
-<div class="code-wrap"><pre data-lang="yaml"><code>kube-apiserver-arg:
-  - "service-account-issuer=https://stwif&lt;SUFFIX&gt;.z20.web.core.windows.net"
-  - "service-account-jwks-uri=https://stwif&lt;SUFFIX&gt;.z20.web.core.windows.net/openid/v1/jwks"</code></pre></div>
-<h3>kubeadm <span class="unv">참고용 · 미검증</span></h3>
-<p>컨트롤 플레인 노드의 <code>/etc/kubernetes/manifests/kube-apiserver.yaml</code> <code>command</code>에 플래그를 추가하면 kubelet이 API 서버를 재시작합니다.</p>
+<table><tr><th><code>--service-account-issuer</code></th><td>토큰 <code>iss</code> 값. 6단계 federated credential의 <code>issuer</code>와 <b>완전히 같아야</b> 함. <b>클러스터에 필요한 변경은 이 플래그 1개뿐</b></td></tr>
+<tr><th><code>--service-account-jwks-uri</code></th><td><b>지정하지 않습니다.</b> 이 플래그는 API 서버가 내놓는 discovery 문서의 <code>jwks_uri</code>만 바꿉니다. 이 가이드는 discovery 문서를 4단계에서 직접 작성해 올리므로 필요 없습니다(랩 검증)</td></tr></table>
+<h3>3-0. 변경 전 점검 (모든 배포판 공통)</h3>
+<div class="code-wrap"><pre data-lang="bash"><code># 1) 현재 issuer 기록 (롤백 시 필요). kubeadm 기본값: https://kubernetes.default.svc.cluster.local
+kubectl get --raw /.well-known/openid-configuration
+
+# 2) 변경 전 기존 토큰 하나 확보 (변경 후에도 유효한지 확인용)
+kubectl -n default create token default --duration=3h &gt; /tmp/old.tok
+
+# 3) kubeadm: 매니페스트 백업은 manifests 디렉터리 "밖"에 둡니다 (안에 두면 kubelet이 static pod로 해석)
+sudo cp /etc/kubernetes/manifests/kube-apiserver.yaml /root/kube-apiserver.yaml.bak
+kubectl -n kube-system get cm kubeadm-config -o yaml &gt; /root/kubeadm-config.bak.yaml</code></pre></div>
+<h3>kubeadm <span class="tag-core" style="background:#eaf6ec;color:#176b35;border-color:#9fd2ae">랩 검증</span></h3>
+<p>컨트롤 플레인 노드의 <code>/etc/kubernetes/manifests/kube-apiserver.yaml</code> <code>command</code>에서 기존 issuer 줄을 <b>새 공개 URL(첫 번째) + 기존 issuer(두 번째)</b>로 바꿉니다. 저장하면 kubelet이 API 서버를 자동 재시작합니다(랩: 약 40초 동안 API 불가, 기존 파드는 계속 실행).</p>
 <div class="code-wrap"><pre data-lang="yaml"><code>    - --service-account-issuer=&lt;ISSUER_URL&gt;
-    - --service-account-jwks-uri=&lt;ISSUER_URL&gt;/openid/v1/jwks</code></pre></div>
-<h3>RKE2 <span class="unv">참고용 · 미검증</span></h3>
-<div class="code-wrap"><pre data-lang="yaml"><code># /etc/rancher/rke2/config.yaml (서버 노드) 후 systemctl restart rke2-server
-kube-apiserver-arg:
-  - "service-account-issuer=&lt;ISSUER_URL&gt;"
-  - "service-account-jwks-uri=&lt;ISSUER_URL&gt;/openid/v1/jwks"</code></pre></div>
-<div class="warn"><b>이미 운영 중인 클러스터라면 (중요, 미검증):</b> issuer를 바꾸면 기존 토큰의 <code>iss</code>가 달라져 그 토큰을 검증하던 기존 소비자가 깨질 수 있습니다. <code>--service-account-issuer</code>는 <b>여러 번 지정</b>할 수 있으며 <b>첫 번째 값이 새 토큰 발급에 쓰이고 나머지는 검증에만 허용</b>됩니다. 새 공개 issuer를 첫 번째로, 기존 issuer를 두 번째로 두면 기존 토큰이 계속 유효합니다. 적용 전에 <code>kubectl get --raw /.well-known/openid-configuration</code>으로 현재 issuer 값을 기록하세요. HA 컨트롤 플레인은 <b>모든 노드에 같은 설정</b>을 적용합니다.</div>
-<p class="done">완료 기준: <code>kubectl get --raw /.well-known/openid-configuration</code>의 <code>issuer</code>와 <code>jwks_uri</code>가 설정한 공개 URL로 나옵니다. (랩에서는 k3s 노드가 <code>Ready</code>가 되고 4단계 대조 검증이 통과하면 확인됨)</p>
+    - --service-account-issuer=https://kubernetes.default.svc.cluster.local   # 기존 값(검증 전용)</code></pre></div>
+<p>랩 결과: 변경 <b>전에</b> 만든 토큰이 변경 후에도 API 서버에서 인증됨(HTTP 201), 변경 <b>후</b> 발급 토큰의 <code>iss</code>는 새 공개 URL이었습니다.</p>
+<div class="warn"><b>kubeadm 업그레이드 대비 (미검증):</b> 수동 편집한 매니페스트는 <code>kubeadm upgrade</code> 때 <code>kubeadm-config</code>의 <code>ClusterConfiguration</code> 기준으로 다시 생성되어 플래그가 사라질 수 있습니다(랩 기본값은 <code>apiServer: {}</code>). 영구 반영하려면 <code>kubectl -n kube-system edit cm kubeadm-config</code>로 아래를 추가하고(모든 컨트롤 플레인 노드에 동일), 업그레이드 후 3단계 완료 기준을 재확인하세요.
+<pre data-lang="yaml"><code>apiServer:
+  extraArgs:          # kubeadm.k8s.io/v1beta4: name/value 목록, 같은 name 중복 가능
+    - name: service-account-issuer
+      value: &lt;ISSUER_URL&gt;
+    - name: service-account-issuer
+      value: https://kubernetes.default.svc.cluster.local</code></pre></div>
+<h3>3-1. 변경 위험과 대비책</h3>
+<table class="match"><thead><tr><th>위험</th><th>대비책</th><th>상태</th></tr></thead>
+<tr><td>API 서버 재시작 동안 API 불가</td><td>업무 외 시간에 적용. 기존 파드는 계속 동작. HA는 노드를 <b>한 대씩</b> 변경</td><td><b>랩 검증</b> (약 40초)</td></tr>
+<tr><td>기존 토큰의 <code>iss</code>가 바뀌어 기존 소비자 깨짐</td><td>플래그를 <b>여러 번</b> 지정: 첫 번째=새 토큰 발급, 나머지=검증 허용. 새 URL 첫째, 기존 값 둘째</td><td><b>랩 검증</b></td></tr>
+<tr><td>오타·잘못된 플래그로 API 서버 기동 실패</td><td>3-0의 백업을 즉시 복원: <code>sudo cp /root/kube-apiserver.yaml.bak /etc/kubernetes/manifests/kube-apiserver.yaml</code> (kubectl 불가 시 <code>crictl ps -a</code>·<code>crictl logs</code> 또는 <code>/var/log/pods</code>로 원인 확인)</td><td><b>랩 검증</b> (복원 15초)</td></tr>
+<tr><td>업그레이드·재프로비저닝 때 플래그 소실</td><td>kubeadm은 <code>ClusterConfiguration</code>에 반영. 업그레이드 후 완료 기준 재확인</td><td><span class="unv">미검증</span></td></tr>
+<tr><td>HA 노드 간 설정 불일치</td><td>모든 컨트롤 플레인 노드에 <b>같은 값·같은 순서</b> 적용 후 각 노드에서 확인</td><td><span class="unv">미검증</span></td></tr>
+<tr><td>JWKS 게시 권한 · 서명 키 회전 누락</td><td>게시 계정은 Storage Blob Data Contributor만 부여. 키 회전 시 4단계를 재실행해 이전·새 키 모두 게시</td><td>게시는 <b>랩 검증</b></td></tr>
+<tr><td>관리형 Kubernetes(AKS 외 EKS/GKE 등)</td><td>API 서버 플래그를 직접 못 바꾸면 이 방식 불가. 3단계 대안(클라이언트 인증서/시크릿, SPIRE) 검토</td><td>참고</td></tr></table>
+<p><b>롤백:</b> 백업한 매니페스트(또는 config.yaml)를 복원 → API 서버 재시작 후 <code>kubectl get --raw /.well-known/openid-configuration</code>의 <code>issuer</code>가 3-0에서 기록한 값인지 확인. 이후 6단계에서 만든 federated credential은 무해하므로 남겨도 됩니다.</p>
+<p class="done">완료 기준: <code>kubectl get --raw /.well-known/openid-configuration</code>의 <code>issuer</code>가 설정한 공개 URL로 나옵니다. (<code>jwks_uri</code>는 내부 주소로 나오는 것이 정상이며 Entra는 이 값을 쓰지 않습니다. 랩에서는 노드가 <code>Ready</code>가 되고 4단계 대조 검증이 통과하면 확인됨)</p>
 </section>
 
 <section id="s4" class="core"><h2>OIDC 메타데이터 공개 <span class="tag-core">WIF 핵심 ②</span> <span class="tag-where w-both">온프레미스 → Azure</span></h2>
 <p><b>왜 하나요?</b> Entra ID는 토큰의 <code>iss</code> 주소로 직접 접속해 서명 검증용 <b>공개키</b>를 가져옵니다. 클러스터 서명 키의 공개키만 JWKS로 만들어 공개 호스팅에 올립니다. 개인키는 클러스터 밖으로 나가지 않습니다.</p>
 <h3>4-1. 공개키(JWKS) 확보 — 방법 두 가지</h3>
 <table class="match"><thead><tr><th>방법</th><th>설명</th><th>상태</th></tr></thead>
-<tr><td><b>A. API 서버에서 가져오기</b><br>(배포판 무관)</td><td><code>kubectl get --raw /openid/v1/jwks &gt; jwks.json</code><br><code>kubectl get --raw /.well-known/openid-configuration &gt; openid-configuration</code><br>3단계에서 issuer/jwks-uri를 공개 URL로 지정했으므로 그대로 올리면 됩니다.</td><td><span class="unv">참고용 · 미검증</span></td></tr>
-<tr><td><b>B. 서명 공개키 파일로 직접 생성</b></td><td>컨트롤 플레인의 서명 키에서 공개키를 추출해 JWKS 변환. k3s 경로: <code>/var/lib/rancher/k3s/server/tls/service.current.key</code>, <code>service.key</code>(키 회전 시 이전 키도 포함). 변환 스크립트: <code>scripts/lib/make_jwks.py</code> (<code>kid</code>는 DER SPKI의 SHA-256을 base64url 인코딩, Kubernetes와 동일)</td><td><b>랩 검증</b></td></tr></table>
+<tr><td><b>A. API 서버에서 가져오기</b><br>(배포판 무관)</td><td><code>kubectl get --raw /openid/v1/jwks &gt; jwks.json</code><br>JWKS(<code>jwks.json</code>)만 가져옵니다. <code>/.well-known/openid-configuration</code>은 <code>jwks_uri</code>가 내부 주소라 <b>그대로 올리면 안 되고</b> 아래 4-2의 문서를 직접 작성합니다. 서명 키 파일 경로를 몰라도 됩니다</td><td><b>랩 검증</b></td></tr>
+</table>
 <p class="note">키 회전 시 JWKS에 <b>이전 키와 새 키가 함께</b> 있어야 이미 발급된 토큰이 계속 검증됩니다. 회전 때마다 이 단계를 다시 수행하는 운영 절차를 마련하세요(10단계).</p>
-<h3>4-2. 업로드 경로</h3>
+<h3>4-2. discovery 문서 작성 · 업로드 경로</h3>
 <table><tr><th><code>/.well-known/openid-configuration</code></th><td>Entra가 가장 먼저 읽는 문서. <code>issuer</code>가 토큰의 <code>iss</code>와 같아야 함</td></tr>
 <tr><th><code>/openid/v1/jwks</code></th><td>서명 검증용 공개키 목록. 토큰 헤더의 <code>kid</code>와 일치하는 키가 있어야 함</td></tr></table>
 <div class="code-wrap"><pre data-lang="json"><code>{
@@ -223,9 +238,11 @@ az storage blob upload --account-name stwif$SUFFIX --auth-mode login -c '$web' \
 curl -fsS $ISSUER_URL/openid/v1/jwks
 kubectl -n default create token default --audience api://AzureADTokenExchange   # iss / kid 비교 대상</code></pre></div>
 <p class="done">완료 기준(랩): <code>OK: 토큰의 iss/kid 가 공개된 issuer/JWKS 와 일치합니다</code></p>
-<div class="warn"><b>정책 때문에 업로드/접근이 막히면:</b> 일부 구독은 정책(<code>modify</code> 효과)이 Storage의 <code>publicNetworkAccess</code>를 <b>Disabled</b>로 강제하고 CLI로 바꿔도 되돌립니다. 랩 환경에서는 관리그룹의 <code>MCAPSGovDeployPolicies</code>가 원인이었고, <b>리소스 그룹 범위 정책 예외 생성 → 1분 대기 → 공개 접근 활성화</b> 후 통과했습니다.
-<pre data-lang="bash"><code>az policy state list --resource $(az storage account show -g $RG -n stwif$SUFFIX --query id -o tsv) \
-  --query "[?policyDefinitionAction=='modify'].{a:policyAssignmentName,d:policyDefinitionName,scope:policyAssignmentScope}" -o table
+<div class="warn"><b>정책 때문에 업로드/접근이 막히면:</b> 일부 구독은 정책(<code>modify</code> 효과)이 Storage의 <code>publicNetworkAccess</code>를 <b>Disabled</b>로 강제하고 CLI로 바꿔도 되돌립니다. 랩 환경에서는 관리그룹의 <code>MCAPSGovDeployPolicies</code>가 원인이었고(아래 목록에서 이름으로 찾음), <b>리소스 그룹 범위 정책 예외 생성 → 1분 대기 → 공개 접근 활성화</b> 후 통과했습니다.
+<pre data-lang="bash"><code># 상속된(관리그룹) 정책 할당까지 조회. az policy state list 는 비어 나올 수 있음(랩 검증)
+az rest --method get \
+  --url "https://management.azure.com/subscriptions/$(az account show --query id -o tsv)/providers/Microsoft.Authorization/policyAssignments?api-version=2022-06-01" \
+  --query "value[].{name:name,id:id}" -o table
 
 az policy exemption create --name wif-demo-storage --policy-assignment "&lt;할당 ID&gt;" \
   --exemption-category Waiver --resource-group $RG --expires-on "&lt;UTC 시각&gt;"
@@ -234,24 +251,22 @@ az storage account update -g $RG -n stwif$SUFFIX --public-network-access Enabled
 예외를 받을 수 없으면 issuer를 사내 공개 웹서버/CDN, GitHub Pages 등 <b>다른 공인 HTTPS 호스팅</b>에 올리고 <code>ISSUER_URL</code>을 바꿔 3단계부터 다시 진행합니다.</div>
 </section>
 
-<section id="s5" class="core"><h2>Workload Identity webhook 설치 <span class="tag-core">WIF 핵심 ③</span> <span class="tag-where w-onprem">온프레미스</span></h2>
-<p><b>왜 하나요?</b> 파드가 Entra에 제시할 토큰(audience <code>api://AzureADTokenExchange</code>인 SA 토큰)과 접속 정보를 <b>자동으로</b> 파드에 넣어 줍니다. 이 webhook은 Azure 밖의 Kubernetes에서도 동작합니다.</p>
-<div class="code-wrap"><pre data-lang="bash"><code>helm repo add azure-workload-identity https://azure.github.io/azure-workload-identity/charts
-helm repo update
-helm upgrade --install workload-identity-webhook azure-workload-identity/workload-identity-webhook \
-  --namespace azure-workload-identity-system --create-namespace \
-  --set azureTenantID=&lt;TENANT_ID&gt; --wait --timeout 5m
-kubectl -n azure-workload-identity-system get pods</code></pre></div>
-<h3>webhook이 파드에 주입하는 것</h3>
-<p>파드에 라벨 <code>azure.workload.identity/use: "true"</code>가 있으면 다음이 자동 주입됩니다.</p>
-<table><tr><th>주입 항목</th><td>값 / 의미</td></tr>
-<tr><th><code>AZURE_CLIENT_ID</code></th><td>ServiceAccount 어노테이션 <code>azure.workload.identity/client-id</code> 값(= UAMI client ID)</td></tr>
-<tr><th><code>AZURE_TENANT_ID</code></th><td>Helm 값 <code>azureTenantID</code></td></tr>
+<section id="s5" class="core"><h2>파드에 토큰 주입: webhook 없이 매니페스트로 <span class="tag-core">WIF 핵심 ③</span> <span class="tag-where w-onprem">온프레미스</span></h2>
+<p><b>왜 하나요?</b> 파드가 Entra에 제시할 토큰(audience <code>api://AzureADTokenExchange</code>인 SA 토큰)과 접속 정보를 파드 안에 넣어야 합니다. Azure Workload Identity webhook이 이를 자동으로 해 주지만 클러스터에 helm 차트와 admission webhook을 설치해야 합니다. 이 가이드는 <b>같은 내용을 파드 매니페스트에 직접 적어</b> 클러스터에 설치하는 것을 없앱니다. 랩에서 이 방식으로 검증했습니다.</p>
+<h3>파드 매니페스트에 넣는 것</h3>
+<table><tr><th>projected 볼륨</th><td><code>serviceAccountToken</code>: <code>audience: api://AzureADTokenExchange</code>, <code>expirationSeconds: 3600</code>, <code>path: azure-identity-token</code>. <b>Audience 연결 고리</b>. kubelet이 만료 전 자동 갱신</td></tr>
+<tr><th><code>AZURE_CLIENT_ID</code></th><td>UAMI client ID</td></tr>
+<tr><th><code>AZURE_TENANT_ID</code></th><td>Entra 테넌트 ID</td></tr>
 <tr><th><code>AZURE_AUTHORITY_HOST</code></th><td><code>https://login.microsoftonline.com/</code></td></tr>
-<tr><th><code>AZURE_FEDERATED_TOKEN_FILE</code></th><td>토큰 파일 경로(<code>/var/run/secrets/azure/wi/.../azure-identity-token</code>)</td></tr>
-<tr><th>projected 볼륨</th><td>audience가 <code>api://AzureADTokenExchange</code>인 SA 토큰(<b>Audience 연결 고리</b>). kubelet이 만료 전 자동 갱신</td></tr></table>
-<p class="note">주입 값은 모두 <b>비밀이 아닙니다</b>(ID와 경로). 토큰은 짧은 수명의 파드 전용 값이며 Secret 오브젝트로 저장되지 않습니다. 사내 레지스트리만 허용하는 환경이면 webhook 이미지를 미러링하고 Helm 값으로 이미지 경로를 바꾸세요(미검증).</p>
-<p class="done">완료 기준: <code>azure-wi-webhook-controller-manager</code> 파드 2개가 <code>Running</code>입니다. 인증서 준비 중 재시작 1회는 정상입니다.</p>
+<tr><th><code>AZURE_FEDERATED_TOKEN_FILE</code></th><td>볼륨을 마운트한 경로의 토큰 파일. 이 가이드는 <code>/var/run/secrets/azure/tokens/azure-identity-token</code></td></tr></table>
+<p class="note">SDK(<code>DefaultAzureCredential</code> → <code>WorkloadIdentityCredential</code>)가 위 환경변수 4개를 읽어 토큰을 교환합니다. 값은 모두 <b>비밀이 아닙니다</b>(ID와 경로). 토큰은 짧은 수명의 파드 전용 값이며 Secret 오브젝트로 저장되지 않습니다. 전체 YAML은 7단계에 있습니다.</p>
+<h3>webhook을 쓸 때와 비교</h3>
+<table class="match"><thead><tr><th>구분</th><th>webhook 생략 (이 가이드)</th><th>webhook 사용</th></tr></thead>
+<tr><td>클러스터에 설치</td><td><b>없음</b></td><td>helm 차트 + admission webhook</td></tr>
+<tr><td>워크로드 YAML</td><td>볼륨 + 환경변수 약 20줄</td><td>라벨 1개 + SA 어노테이션</td></tr>
+<tr><td>적합한 경우</td><td>클러스터를 건드리기 어렵거나 워크로드가 적을 때</td><td>많은 팀·워크로드가 같은 클러스터를 쓸 때</td></tr></table>
+<p class="small">webhook을 쓰려면 <a href="https://azure.github.io/azure-workload-identity/" target="_blank" rel="noopener">Azure Workload Identity 문서</a>의 설치 절차를 따릅니다(이 가이드에서는 검증하지 않음). 6단계 federated credential은 어느 방식이든 같습니다.</p>
+<p class="done">완료 기준: <code>kubectl get pods -A</code>에 webhook 파드가 없고, 클러스터 변경은 3단계 플래그 1개뿐입니다.</p>
 </section>
 
 <section id="s6" class="core"><h2>Federated credential 생성 <span class="tag-core">WIF 핵심 ④ · 가장 중요</span> <span class="tag-where w-azure">Azure</span></h2>
@@ -266,30 +281,61 @@ kubectl -n azure-workload-identity-system get pods</code></pre></div>
 <tr><th><code>--subject</code></th><td><code>system:serviceaccount:&lt;네임스페이스&gt;:&lt;SA 이름&gt;</code>. <b>정확히 일치</b>(와일드카드 불가)</td></tr>
 <tr><th><code>--audiences</code></th><td><code>api://AzureADTokenExchange</code>. 토큰 <code>aud</code>와 일치해야 함</td></tr></table>
 <h3>subject를 SA 하나로 제한하는 이유 (최소 권한)</h3>
-<p>subject를 <code>wif-sa</code>로 고정하면 <b>같은 클러스터의 다른 ServiceAccount는 UAMI 권한을 쓸 수 없습니다.</b> 랩에서 <code>wif-other-sa</code>에 같은 client-id 어노테이션을 붙여도 Entra가 <code>AADSTS700213</code>으로 거부함을 확인했습니다. 워크로드마다 UAMI와 federated credential을 분리하세요.</p>
+<p>subject를 <code>wif-sa</code>로 고정하면 <b>같은 클러스터의 다른 ServiceAccount는 UAMI 권한을 쓸 수 없습니다.</b> 랩에서 <code>wif-other-sa</code> 파드에 같은 <code>AZURE_CLIENT_ID</code>를 줘도 Entra가 <code>AADSTS700213</code>으로 거부함을 확인했습니다. 워크로드마다 UAMI와 federated credential을 분리하세요.</p>
 <p class="note">등록 직후 전파에 수 분 걸릴 수 있습니다. 랩 검증 스크립트는 자동 재시도합니다. 클러스터를 여러 개 운영한다면 <b>클러스터마다 issuer가 다르므로 federated credential을 각각</b> 만들어야 합니다(UAMI당 한도 있음).</p>
 <p class="done">완료 기준: 등록된 issuer/subject/audience를 <code>az identity federated-credential show</code>로 확인합니다. 포털: <b>Managed Identities → id-wif-demo → Federated credentials</b></p>
 </section>
 
 <section id="s7"><h2>워크로드 배포 <span class="tag-where w-onprem">온프레미스</span></h2>
-<p><b>왜 하나요?</b> 실제로 모델을 호출하는 파드를 배포해 WIF가 끝까지 동작하는지 봅니다. 앞 단계와 맞물리는 부분은 ServiceAccount와 파드 라벨 두 곳입니다.</p>
-<div class="code-wrap"><pre data-lang="yaml"><code># 1) ServiceAccount: Subject(6단계)와 UAMI 연결 고리
+<p><b>왜 하나요?</b> 실제로 모델을 호출하는 파드를 배포해 WIF가 끝까지 동작하는지 봅니다. 5단계에서 설명한 projected 볼륨과 환경변수를 파드 매니페스트에 직접 넣습니다. 앞 단계와 맞물리는 부분은 ServiceAccount 이름(6단계 subject)과 토큰 audience입니다.</p>
+<div class="code-wrap"><pre data-lang="yaml"><code># 1) ServiceAccount: Subject(6단계) — 어노테이션 불필요
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: wif-sa
   namespace: wif-demo
-  annotations:
-    azure.workload.identity/client-id: &lt;UAMI client ID&gt;
 ---
-# 2) Pod(Job): webhook 주입 대상 라벨 + 사용할 ServiceAccount
+# 2) Job: projected 토큰 볼륨 + AZURE_* 환경변수 (webhook 없음)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wif-call
+  namespace: wif-demo
 spec:
+  backoffLimit: 0
   template:
-    metadata:
-      labels:
-        azure.workload.identity/use: "true"
     spec:
-      serviceAccountName: wif-sa</code></pre></div>
+      serviceAccountName: wif-sa
+      restartPolicy: Never
+      containers:
+        - name: demo
+          image: &lt;앱 이미지&gt;
+          env:
+            - name: FOUNDRY_ENDPOINT
+              value: "https://&lt;Foundry 리소스&gt;.openai.azure.com"
+            - name: FOUNDRY_DEPLOYMENT
+              value: "&lt;모델 배포 이름&gt;"
+            - name: AZURE_CLIENT_ID
+              value: "&lt;UAMI client ID&gt;"
+            - name: AZURE_TENANT_ID
+              value: "&lt;테넌트 ID&gt;"
+            - name: AZURE_AUTHORITY_HOST
+              value: "https://login.microsoftonline.com/"
+            - name: AZURE_FEDERATED_TOKEN_FILE
+              value: /var/run/secrets/azure/tokens/azure-identity-token
+          volumeMounts:
+            - name: azure-identity-token
+              mountPath: /var/run/secrets/azure/tokens
+              readOnly: true
+      volumes:
+        - name: azure-identity-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  audience: api://AzureADTokenExchange
+                  expirationSeconds: 3600
+                  path: azure-identity-token</code></pre></div>
+<p class="small">Deployment로 배포할 때도 <code>spec.template.spec</code> 안의 <code>serviceAccountName</code>, <code>env</code>, <code>volumeMounts</code>, <code>volumes</code>는 동일합니다.</p>
 <details open><summary>앱 핵심 코드 (DefaultAzureCredential) — 코드에 키·시크릿이 없습니다</summary>
 <div class="code-wrap"><pre data-lang="python"><code>credential = DefaultAzureCredential()
 token_provider = get_bearer_token_provider(
@@ -298,29 +344,8 @@ client = AzureOpenAI(azure_endpoint=endpoint, api_version="2024-10-21",
                      azure_ad_token_provider=token_provider)
 client.chat.completions.create(model=deployment, max_completion_tokens=500,
     messages=[{"role": "user", "content": "한국어로 짧게 인사해 주세요."}])</code></pre></div>
-<p class="small">SDK가 주입된 <code>AZURE_CLIENT_ID</code>, <code>AZURE_TENANT_ID</code>, <code>AZURE_FEDERATED_TOKEN_FILE</code>을 읽어 <code>WorkloadIdentityCredential</code>로 토큰을 교환합니다. 앱은 <code>app/demo.py</code>, 매니페스트 템플릿은 <code>k8s/*.yaml.tpl</code>에 있습니다.</p></details>
+<p class="small">SDK가 <code>AZURE_CLIENT_ID</code>, <code>AZURE_TENANT_ID</code>, <code>AZURE_FEDERATED_TOKEN_FILE</code>을 읽어 <code>WorkloadIdentityCredential</code>로 토큰을 교환합니다. 앱은 <code>app/demo.py</code>, 매니페스트 템플릿은 <code>k8s/*.yaml.tpl</code>에 있습니다.</p></details>
 <p class="done">완료 기준: <code>kubectl -n wif-demo get secrets</code>가 <b>비어 있습니다</b>.</p>
-</section>
-
-<section id="s8"><h2>검증: WIF를 양성·음성으로 증명</h2>
-<p><b>왜 하나요?</b> “성공한다”만으로는 keyless를 증명하지 못합니다. 성공 1개와 <b>실패해야 하는 2개</b>를 함께 확인합니다. 랩에서 <code>07-verify.sh</code>로 모두 통과했습니다.</p>
-<table><tr><th>단계</th><td>기대 결과 · 증명하는 것</td></tr>
-<tr><th>1/4 양성</th><td><code>wif-sa</code> 파드가 모델 호출 성공(<code>RESULT=OK</code>). secret 유사 환경변수 없음. 토큰 <code>iss·sub·aud</code> 출력 → <b>신뢰 체인 4값 일치</b></td></tr>
-<tr><th>2/4 Secret 없음</th><td>네임스페이스의 Secret 0개 → 저장된 비밀이 없음</td></tr>
-<tr><th>3/4 음성 ①</th><td>다른 SA(<code>wif-other-sa</code>)는 <code>AADSTS700213</code> 거부 → <b>subject 매칭이 강제됨</b></td></tr>
-<tr><th>4/4 음성 ②</th><td>임의 API Key 호출은 HTTP <b>401</b> → <b>API Key 경로가 막혀 WIF만 유일한 경로</b></td></tr></table>
-<div class="code-wrap"><pre data-lang="text"><code>=== 2. 투영된 ServiceAccount 토큰 클레임 ===
-  iss: https://stwif&lt;SUFFIX&gt;.z20.web.core.windows.net
-  sub: system:serviceaccount:wif-demo:wif-sa
-  aud: ['api://AzureADTokenExchange']
-=== 3. Foundry 모델 호출 (DefaultAzureCredential) ===
-  응답: 안녕하세요!
-RESULT=OK
-✅ 통과: 토큰 교환 및 모델 호출 성공
-✅ 통과: Secret 0개
-✅ 통과: Entra가 AADSTS700213 으로 거부
-✅ 통과: 키 호출 HTTP 401
-🎉 모든 검증 통과: keyless WIF 증명 완료</code></pre></div>
 </section>
 
 <section id="s9" class="core"><h2>WIF 심화 점검: 연결 고리를 하나씩 직접 확인 <span class="tag-core">선택 · 디버깅용</span></h2>
@@ -335,7 +360,7 @@ RESULT=OK
 <div class="code-wrap"><pre data-lang="bash"><code>curl -s $ISSUER_URL/.well-known/openid-configuration | python3 -m json.tool
 curl -s $ISSUER_URL/openid/v1/jwks | python3 -m json.tool   # keys[].kid 가 9-1 토큰 헤더의 kid 와 같아야 함</code></pre></div>
 <h3>9-4. 토큰 교환을 수동으로 재현</h3>
-<p>webhook과 SDK가 대신 해 주는 일을 직접 합니다. SA 토큰을 <code>client_assertion</code>으로 제출하면 Entra가 액세스 토큰을 돌려줍니다. <span class="unv">미검증</span></p>
+<p>SDK가 대신 해 주는 일을 직접 합니다. SA 토큰을 <code>client_assertion</code>으로 제출하면 Entra가 액세스 토큰을 돌려줍니다. <span class="unv">미검증</span></p>
 <div class="code-wrap"><pre data-lang="bash"><code>SA_TOKEN=$(kubectl -n wif-demo create token wif-sa --audience api://AzureADTokenExchange)
 curl -s -X POST "https://login.microsoftonline.com/$TENANT_ID/oauth2/v2.0/token" \
   -d "client_id=$CLIENT_ID" \
@@ -348,7 +373,7 @@ curl -s -X POST "https://login.microsoftonline.com/$TENANT_ID/oauth2/v2.0/token"
 <table class="match"><thead><tr><th>오류</th><th>끊어진 고리</th><th>확인 · 조치</th></tr></thead>
 <tr><td><code>AADSTS700211</code></td><td>Issuer</td><td>토큰 <code>iss</code> ≠ 등록 issuer(슬래시·대소문자). 9-1 ↔ 9-2 비교</td></tr>
 <tr><td><code>AADSTS700213</code></td><td>Subject</td><td>네임스페이스/SA 이름 불일치, 또는 등록 직후 전파 지연</td></tr>
-<tr><td>audience 오류</td><td>Audience</td><td>토큰 <code>aud</code> ≠ <code>api://AzureADTokenExchange</code>. webhook 주입·파드 라벨 확인</td></tr>
+<tr><td>audience 오류</td><td>Audience</td><td>토큰 <code>aud</code> ≠ <code>api://AzureADTokenExchange</code>. projected 볼륨의 audience와 환경변수 확인</td></tr>
 <tr><td>서명 검증 실패 / 키 없음</td><td>서명 키</td><td>JWKS <code>kid</code> ≠ 토큰 <code>kid</code>. 키 회전·재설치 후 4단계 재실행</td></tr>
 <tr><td>issuer 문서를 가져올 수 없음</td><td>공개 접근</td><td>호스팅 공개 여부, 인증서(공인 CA), 정책(4단계 경고)</td></tr>
 <tr><td>교환은 되는데 모델 호출 403</td><td>RBAC</td><td>UAMI의 Cognitive Services OpenAI User 할당(전파 수 분)</td></tr>
@@ -365,32 +390,6 @@ curl -s -X POST "https://login.microsoftonline.com/$TENANT_ID/oauth2/v2.0/token"
 <li><b>Foundry 네트워크:</b> 이 가이드는 공용 엔드포인트 기준입니다. Private Endpoint만 허용하려면 ExpressRoute/VPN, 사설 DNS가 추가로 필요합니다.</li>
 <li><b>API Key 비활성:</b> Foundry <code>disableLocalAuth=true</code>로 키 경로를 막아 WIF 외 우회를 차단합니다.</li>
 </ul>
-</section>
-
-<section id="labA" class="lab"><h2>부록 A. 랩 재현: Azure VM 1대의 k3s를 “온프레미스”로 사용</h2>
-<p>온프레미스 장비 없이 위 절차를 그대로 재현해 동작을 증명한 환경입니다. <b>Azure VM이지만 VM에 관리 ID를 붙이지 않았고</b>, 클러스터는 Azure와 무관한 일반 Kubernetes(k3s)로 취급해 온프레미스와 동일한 WIF 경로만 사용합니다.</p>
-<table class="match"><thead><tr><th>본문 단계</th><th>랩 스크립트</th><th>내용</th></tr></thead>
-<tr><td>02 Azure 준비 + 클러스터 장비</td><td><code>01-azure-infra.sh</code></td><td>RG, UAMI, Storage(정적 웹), Foundry + 모델, RBAC, VM(SSH는 실행 PC IP만 허용). preflight로 모델 GA·VM SKU 확인</td></tr>
-<tr><td>03 클러스터 issuer</td><td><code>02-install-k3s.sh</code></td><td>config.yaml에 issuer/jwks-uri 지정 후 k3s 설치</td></tr>
-<tr><td>04 OIDC 공개</td><td><code>03-publish-oidc.sh</code></td><td>JWKS·discovery 생성·업로드, 실제 토큰 iss/kid 대조</td></tr>
-<tr><td>05 webhook</td><td><code>04-install-webhook.sh</code></td><td>helm 설치</td></tr>
-<tr><td>06 federated credential</td><td><code>05-federate.sh</code></td><td>UAMI에 issuer + <code>wif-sa</code> subject 등록</td></tr>
-<tr><td>07 워크로드</td><td><code>06-deploy-demo.sh</code></td><td>SA 2개(<code>wif-sa</code>, <code>wif-other-sa</code>) + 데모 Job</td></tr>
-<tr><td>08 검증</td><td><code>07-verify.sh</code></td><td>양성 1 + 음성 2 + Secret 0개</td></tr>
-<tr><td>정리</td><td><code>99-cleanup.sh</code></td><td>리소스 그룹 삭제</td></tr></table>
-<div class="code-wrap"><pre data-lang="bash"><code>az login && az account set --subscription "&lt;구독&gt;"
-pip install -r requirements-dev.txt    # cryptography (Windows는 Git Bash 사용)
-
-bash scripts/01-azure-infra.sh
-bash scripts/02-install-k3s.sh
-bash scripts/03-publish-oidc.sh
-bash scripts/04-install-webhook.sh
-bash scripts/05-federate.sh
-bash scripts/06-deploy-demo.sh
-bash scripts/07-verify.sh
-bash scripts/99-cleanup.sh             # yes 입력 시 삭제</code></pre></div>
-<p class="note">기본값(리전 <code>eastus2</code>, VM <code>Standard_D2s_v7</code>, 모델 <code>gpt-5.4-mini</code>/<code>2026-03-17</code>/<code>GlobalStandard</code>)은 <code>scripts/00-env.sh</code>에서 환경변수로 변경합니다. Windows의 WSL <code>bash</code>는 네트워크 문제가 있을 수 있어 <b>Git Bash</b>를 사용하세요.</p>
-<p class="warn"><b>랩과 실제 온프레미스의 차이:</b> 랩은 VM이 Azure 안에 있어 Foundry까지 지연이 짧고 egress 제약이 없습니다. 실제 온프레미스에서는 방화벽·프록시·DNS(1단계 표)와 클러스터 배포판별 설정(3단계)을 별도로 확인해야 합니다.</p>
 </section>
 
 <section id="trouble"><h2>문제 해결</h2>

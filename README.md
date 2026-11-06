@@ -16,11 +16,13 @@ Pod(SA 토큰, aud=api://AzureADTokenExchange)
 ## 실행 순서
 ```bash
 bash scripts/01-azure-infra.sh     # RG, UAMI, Storage(OIDC), Foundry+모델, VM
-bash scripts/02-install-k3s.sh     # k3s (service-account issuer/jwks-uri 설정)
+bash scripts/02-install-k3s.sh     # k3s (API 서버 플래그: service-account-issuer 1개)
+# 일반 kubeadm 클러스터로 재현하려면 02 대신 scripts/k1-install-kubeadm.sh 실행 후
+# 가이드 3단계대로 매니페스트에 issuer 플래그를 추가하고
+# export KUBECTL_CMD="sudo kubectl --kubeconfig /etc/kubernetes/admin.conf" (JWKS는 API 서버에서 가져옴)
 bash scripts/03-publish-oidc.sh    # JWKS/discovery 업로드, 실제 토큰 iss/kid 대조
-bash scripts/04-install-webhook.sh # Azure Workload Identity webhook (helm)
 bash scripts/05-federate.sh        # UAMI federated credential 생성
-bash scripts/06-deploy-demo.sh     # 데모 Job 배포
+bash scripts/06-deploy-demo.sh     # Namespace/SA/ConfigMap 배포 (webhook 없음)
 bash scripts/07-verify.sh          # 양성/음성 검증
 bash scripts/99-cleanup.sh         # 리소스 삭제
 ```

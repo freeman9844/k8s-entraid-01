@@ -53,7 +53,8 @@ SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$STATE_DIR/
 
 vm_ssh() { ssh "${SSH_OPTS[@]}" "$ADMIN_USER@$VM_IP" "$@"; }
 vm_scp() { ( cd "$(dirname "$1")" && scp "${SSH_OPTS[@]}" "$(basename "$1")" "$ADMIN_USER@$VM_IP:$2" ); }
-vm_kubectl() { vm_ssh "sudo k3s kubectl $(printf '%q ' "$@")"; }
+: "${KUBECTL_CMD:=sudo k3s kubectl}"   # kubeadm 등: KUBECTL_CMD="sudo kubectl --kubeconfig /etc/kubernetes/admin.conf"
+vm_kubectl() { vm_ssh "$KUBECTL_CMD $(printf '%q ' "$@")"; }
 
 retry() { # tries delay cmd...
   local tries="$1" delay="$2" i; shift 2

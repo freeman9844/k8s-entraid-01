@@ -4,10 +4,16 @@ source "$(dirname "${BASH_SOURCE[0]}")/00-env.sh"
 require_state ISSUER_URL VM_IP STORAGE
 [[ -n "$PY" ]] || { echo "python 필요" >&2; exit 1; }
 
-echo "[1/4] SA 서명 공개키 추출 → JWKS 생성"
-pem="$(vm_ssh 'for f in service.current.key service.key; do p=/var/lib/rancher/k3s/server/tls/$f; sudo test -f $p && sudo openssl rsa -in $p -pubout 2>/dev/null || true; done')"
+echo "[1/4] JWKS 생성 (JWKS_SOURCE=${JWKS_SOURCE:-api})"
 cd "$ROOT_DIR"
-printf '%s\n' "$pem" | "$PY" scripts/lib/make_jwks.py > "$STATE_DIR/jwks.json"
+if [[ "${JWKS_SOURCE:-api}" == "api" ]]; then
+  # 배포판 무관: API 서버가 서명 공개키 목록을 JWKS 로 제공
+  vm_kubectl get --raw /openid/v1/jwks > "$STATE_DIR/jwks.json"
+else
+  # k3s 서명 키 파일에서 직접 변환
+  pem="$(vm_ssh 'for f in service.current.key service.key; do p=/var/lib/rancher/k3s/server/tls/$f; sudo test -f $p && sudo openssl rsa -in $p -pubout 2>/dev/null || true; done')"
+  printf '%s\n' "$pem" | "$PY" scripts/lib/make_jwks.py > "$STATE_DIR/jwks.json"
+fi
 
 echo "[2/4] discovery 문서 생성"
 cat > "$STATE_DIR/openid-configuration" <<EOF

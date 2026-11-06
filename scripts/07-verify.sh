@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # 양성 1 + Secret 부재 + 음성 2 검증
 source "$(dirname "${BASH_SOURCE[0]}")/00-env.sh"
-require_state FOUNDRY_ENDPOINT VM_IP
+require_state FOUNDRY_ENDPOINT VM_IP CLIENT_ID TENANT_ID
 
 run_job() { # name sa retries
   vm_kubectl -n "$NS" delete job "$1" --ignore-not-found >/dev/null
-  sed "s|__NAME__|$1|g; s|__NS__|${NS}|g; s|__SA__|$2|g; s|__ENDPOINT__|${FOUNDRY_ENDPOINT}|g; s|__DEPLOYMENT__|${MODEL_NAME}|g; s|__RETRIES__|$3|g" \
+  sed "s|__NAME__|$1|g; s|__NS__|${NS}|g; s|__SA__|$2|g; s|__CLIENT_ID__|${CLIENT_ID}|g; s|__TENANT_ID__|${TENANT_ID}|g; s|__ENDPOINT__|${FOUNDRY_ENDPOINT}|g; s|__DEPLOYMENT__|${MODEL_NAME}|g; s|__RETRIES__|$3|g" \
     "$ROOT_DIR/k8s/job.yaml.tpl" | vm_kubectl apply -f - >/dev/null
 }
 

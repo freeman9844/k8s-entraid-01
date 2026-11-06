@@ -19,7 +19,6 @@ cat > "$STATE_DIR/k3s-config.yaml" <<EOF
 write-kubeconfig-mode: "0644"
 kube-apiserver-arg:
   - "service-account-issuer=${ISSUER_URL}"
-  - "service-account-jwks-uri=${ISSUER_URL}/openid/v1/jwks"
 EOF
 fi
 vm_scp "$STATE_DIR/k3s-config.yaml" /tmp/k3s-config.yaml
