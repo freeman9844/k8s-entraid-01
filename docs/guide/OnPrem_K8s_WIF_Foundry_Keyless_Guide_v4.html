@@ -269,6 +269,66 @@ until kubectl -n default get sa default &gt;/dev/null 2&gt;&amp;1; do sleep 2; d
 kubectl get nodes
 kubectl get --raw /.well-known/openid-configuration; echo</code></pre>
 <p class="done">완료 확인: 노드 <code>Ready</code>, 그리고 discovery 문서의 <code>issuer</code>가 <code>ISSUER_URL</code>과 같음(<code>jwks_uri</code>는 내부 주소로 보이는 것이 정상이며 5단계에서 해결).</p>
+
+<h3>4-1. 이미 운영 중인 클러스터에 적용하는 경우 <span class="tag-where w-onprem">조건부 실행</span></h3>
+<p>위 설치는 새 클러스터 기준입니다. <b>기존 클러스터</b>의 issuer를 바꿀 때는 기존 값(k3s·kubeadm 기본값 <code>https://kubernetes.default.svc.cluster.local</code>)을 <b>두 번째 <code>service-account-issuer</code></b>로 함께 남겨야 합니다.</p>
+<div class="wifbox"><b class="t">🔑 WIF 설정 포인트</b><b>첫 번째</b> issuer = 새 토큰의 <code>iss</code>(= 공개 <code>ISSUER_URL</code>), <b>두 번째</b> issuer = 검증 전용(기존 토큰 허용). 순서가 바뀌면 새 토큰이 여전히 내부 주소로 발급되어 WIF가 실패합니다.</div>
+<p class="note"><b>왜 두 개인가요?</b> 기존 issuer를 지우면 이미 발급된 토큰(실행 중인 Pod의 projected 토큰 등)이 즉시 <code>401</code>로 거부됩니다(k3s 실측: 제거 시 구 토큰 401, 유지 시 200). 구 토큰이 모두 만료된 뒤(기본 1시간 갱신 주기를 고려해 충분히 지난 후)에 두 번째 항목을 제거해도 됩니다. API 서버가 재시작되므로 <b>점검 시간대</b>에 진행하세요.</p>
+
+<h4>A. k3s <span class="tag-where w-onprem">조건부 실행</span></h4>
+<pre data-lang="bash"><code>source ~/wif.env
+# 변경 전 상태 기록 + 구 토큰 확보 + 백업
+OLD_ISSUER=$(kubectl get --raw /.well-known/openid-configuration | jq -r .issuer)
+kubectl -n default create token default --duration=3h &gt; /tmp/old.tok
+sudo cp /etc/rancher/k3s/config.yaml /etc/rancher/k3s/config.yaml.bak
+echo "기존 issuer: $OLD_ISSUER"
+
+# config.yaml 에 kube-apiserver-arg 키가 이미 있으면 이 블록을 쓰지 말고 항목만 수동으로 병합하세요(키 중복 시 설정이 깨집니다)
+sudo tee -a /etc/rancher/k3s/config.yaml &gt;/dev/null &lt;&lt;EOF
+kube-apiserver-arg:
+<span class="hl">  - "service-account-issuer=${ISSUER_URL}"</span>
+<span class="hl">  - "service-account-issuer=${OLD_ISSUER}"</span>
+EOF
+sudo systemctl restart k3s
+until kubectl get --raw /readyz &gt;/dev/null 2&gt;&amp;1; do sleep 3; done
+
+# 검증: 새 issuer 적용 + 구 토큰 계속 유효(200)
+kubectl get --raw /.well-known/openid-configuration | jq -r .issuer
+curl -sk -o /dev/null -w '구 토큰: %{http_code}\n' -H "Authorization: Bearer $(cat /tmp/old.tok)" https://127.0.0.1:6443/api
+kubectl get pods -A</code></pre>
+<p class="done">완료 확인: issuer = <code>ISSUER_URL</code>, 구 토큰 <code>200</code>, Pod는 <code>Running</code>/<code>Completed</code>(<code>kubectl wait --for=condition=Ready pod --all</code>은 Completed Pod 때문에 시간 초과되므로 사용하지 않습니다).</p>
+<p class="warn"><b>롤백:</b> <code>sudo cp /etc/rancher/k3s/config.yaml.bak /etc/rancher/k3s/config.yaml &amp;&amp; sudo systemctl restart k3s</code><br><b>k3s 업그레이드 시:</b> 설치 스크립트를 다시 실행해도 <code>config.yaml</code>은 덮어쓰지 않아 설정이 유지됩니다(실측). 다만 설정은 <b>서비스 재시작 후</b> 반영되므로, 업그레이드 후 위 검증(issuer 확인)을 다시 실행하세요.</p>
+
+<h4>B. kubeadm <span class="tag-where w-onprem">조건부 실행</span></h4>
+<p>kubeadm은 API 서버를 static Pod로 실행하므로 매니페스트를 수정합니다. 컨트롤 플레인 노드가 여러 대면 <b>모든 노드</b>에서 동일하게 수행합니다.</p>
+<pre data-lang="bash"><code>source ~/wif.env
+# 변경 전 기록 + 구 토큰 + 백업(백업은 manifests 밖에 둡니다. 안에 두면 static Pod로 인식됨)
+OLD_ISSUER=$(kubectl get --raw /.well-known/openid-configuration | jq -r .issuer)
+kubectl -n default create token default --duration=3h &gt; /tmp/old.tok
+sudo cp /etc/kubernetes/manifests/kube-apiserver.yaml /root/kube-apiserver.yaml.bak
+kubectl -n kube-system get cm kubeadm-config -o yaml &gt; ~/kubeadm-config.bak.yaml
+
+# issuer 줄을 새 값(첫 번째) + 기존 값(두 번째)으로 교체 → kubelet 이 자동 재시작(약 40초 API 중단)
+sudo sed -i "/- --service-account-issuer=/c\\    - --service-account-issuer=${ISSUER_URL}\n    - --service-account-issuer=${OLD_ISSUER}" /etc/kubernetes/manifests/kube-apiserver.yaml
+sudo grep -n service-account-issuer /etc/kubernetes/manifests/kube-apiserver.yaml
+sleep 20; until kubectl get --raw /readyz &gt;/dev/null 2&gt;&amp;1; do sleep 3; done
+
+# 검증
+kubectl get --raw /.well-known/openid-configuration | jq -r .issuer
+curl -sk -o /dev/null -w '구 토큰: %{http_code}\n' -H "Authorization: Bearer $(cat /tmp/old.tok)" https://127.0.0.1:6443/api</code></pre>
+<p class="done">완료 확인(Azure 실측): 매니페스트에 issuer 2줄(<code>ISSUER_URL</code> → 기존 값 순서), discovery issuer = <code>ISSUER_URL</code>, 구 토큰 <code>200</code>.</p>
+<p class="warn"><b>롤백:</b> <code>sudo cp /root/kube-apiserver.yaml.bak /etc/kubernetes/manifests/kube-apiserver.yaml</code> (kubelet 이 자동 반영)</p>
+
+<p><b>kubeadm 업그레이드 대비:</b> <code>kubeadm upgrade</code>는 매니페스트를 <code>kubeadm-config</code> 기준으로 다시 생성하므로, 수동 편집만 하면 업그레이드 후 플래그가 사라질 수 있습니다. <code>kubeadm-config</code>의 <code>ClusterConfiguration</code>에도 같은 값을 넣어 두세요.</p>
+<pre data-lang="bash"><code>kubectl -n kube-system edit cm kubeadm-config
+# ClusterConfiguration(v1beta4)의 apiServer 를 아래처럼 수정(기존 extraArgs 가 있으면 항목만 추가)
+#   apiServer:
+#     extraArgs:
+<span class="hl">#     - name: service-account-issuer
+#       value: &lt;ISSUER_URL&gt;
+#     - name: service-account-issuer
+#       value: https://kubernetes.default.svc.cluster.local</span></code></pre>
+<p class="note"><b>검증 범위:</b> 위 <code>extraArgs</code>가 <code>kubeadm</code>이 생성하는 매니페스트에 두 issuer를 같은 순서로 렌더링하는 것은 Azure에서 확인했습니다(<code>kubeadm init phase control-plane apiserver --dry-run</code>). 실제 <code>kubeadm upgrade apply</code> 후 유지 여부는 <b>미검증</b>이므로, 업그레이드 후 위 검증(issuer·구 토큰 200)을 반드시 다시 실행하세요.</p>
 </section>
 
 <section id="s5" class="core"><h2>OIDC 메타데이터 공개 <span class="tag-core">WIF 핵심 ②</span> <span class="tag-where w-azure">관리 VM → Storage</span></h2>
