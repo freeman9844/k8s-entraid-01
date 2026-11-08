@@ -265,6 +265,7 @@ mkdir -p ~/.kube &amp;&amp; sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config &am
 echo 'export KUBECONFIG=$HOME/.kube/config' &gt;&gt; ~/wif.env
 export KUBECONFIG=$HOME/.kube/config
 until kubectl get nodes 2&gt;/dev/null | grep -q ' Ready'; do sleep 3; done
+until kubectl -n default get sa default &gt;/dev/null 2&gt;&amp;1; do sleep 2; done   # default SA 생성 대기(5-1에서 사용)
 kubectl get nodes
 kubectl get --raw /.well-known/openid-configuration; echo</code></pre>
 <p class="done">완료 확인: 노드 <code>Ready</code>, 그리고 discovery 문서의 <code>issuer</code>가 <code>ISSUER_URL</code>과 같음(<code>jwks_uri</code>는 내부 주소로 보이는 것이 정상이며 5단계에서 해결).</p>
@@ -291,7 +292,8 @@ az storage blob upload --account-name $ST --auth-mode login -c '$web' \
 az storage blob upload --account-name $ST --auth-mode login -c '$web' \
   -f jwks.json -n openid/v1/jwks --content-type application/json --overwrite -o none</code></pre>
 <h3>5-1. 공개 문서와 토큰 대조 <span class="tag-where w-azure">검증 · 공통</span></h3>
-<pre data-lang="bash"><code>curl -fsS $ISSUER_URL/.well-known/openid-configuration; echo
+<pre data-lang="bash"><code>source ~/wif.env
+curl -fsS $ISSUER_URL/.well-known/openid-configuration; echo
 PUB_KIDS=$(curl -fsS $ISSUER_URL/openid/v1/jwks | jq -r '.keys[].kid')
 TOKEN=$(kubectl -n default create token default --audience api://AzureADTokenExchange)
 TOKEN_ISS=$(echo "$TOKEN" | cut -d. -f2 | tr '_-' '/+' | awk '{print $0 "=="}' | base64 -d 2&gt;/dev/null | jq -r .iss)
@@ -425,6 +427,7 @@ az group exists -n $RG      # 삭제 완료 후 false</code></pre>
 <tr><th><code>AADSTS700211</code></th><td>issuer 불일치/비공개. 5-1 대조, <code>az identity federated-credential list</code>로 issuer 확인, Storage 공개 접근 확인(3-4)</td></tr>
 <tr><th>파드 401 (<code>lacks the required data action</code>)</th><td>역할 전파 지연(최대 15분). 대기 후 재시도</td></tr>
 <tr><th>k3s 설치 <code>[ERROR] Download failed</code> / 504</th><td>GitHub 일시 오류. 4단계의 재시도 루프 사용, <code>/tmp/k3s-install.log</code> 확인</td></tr>
+<tr><th><code>serviceaccounts "default" not found</code></th><td>k3s 설치 직후 <code>default</code> ServiceAccount 생성 지연. 4단계의 대기 줄을 실행하거나 잠시 후 재시도</td></tr>
 <tr><th><code>kubectl wait</code>가 <code>no matching resources found</code></th><td>설치 직후 노드 미등록. 4단계처럼 <code>until kubectl get nodes ... Ready</code> 대기 후 사용</td></tr>
 <tr><th>Storage <code>KeyBasedAuthenticationNotPermitted</code></th><td>공유 키 금지 정책. <code>--auth-mode login</code> + Blob Data Contributor 역할 사용(전파 수 분)</td></tr>
 <tr><th>Foundry 생성 시 <code>PublicNetworkAccess is required</code></th><td>3-2처럼 CLI 대신 ARM PUT</td></tr>
