@@ -48,7 +48,12 @@ bash scripts/99-cleanup.sh   # 앱 등록도 함께 삭제
 `bash scripts/01-azure-infra.sh && bash scripts/02-install-k3s.sh` (AUTH_MODE=cert) 후:
 ```bash
 bash scripts/s1-create-app-secret.sh && bash scripts/s2-deploy-secret.sh && bash scripts/s3-verify-secret.sh
-```n가이드: `docs/guide/OnPrem_K8s_Client_Certificate_Foundry_Guide_v3.html`
+```
+가이드: `docs/guide/OnPrem_K8s_Client_Certificate_Foundry_Guide_v3.html`
+
+## 관리 VM부터 시작하는 WIF 가이드 (v4)
+관리 VM 생성 → 같은 VM에 k3s 설치 → WIF 연동까지 CLI만으로 따라 하는 가이드입니다(실제 Azure 배포로 검증).
+가이드: `docs/guide/OnPrem_K8s_WIF_Foundry_Keyless_Guide_v4.html`
 
 ## 테스트
 `python -m unittest discover -s tests -p "test_*.py"`

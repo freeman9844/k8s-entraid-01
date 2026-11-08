@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>관리 VM + k3s로 WIF Keyless Foundry 호출 따라 하기 (v4)</title>
+<style>
+:root{--blue:#0067b8;--ink:#172333;--muted:#526174;--line:#dce4ed}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:#f5f8fc;color:var(--ink);font:16px/1.75 "Segoe UI","Malgun Gothic",sans-serif;counter-reset:step}
+a{color:var(--blue);text-underline-offset:3px}.wrap{max-width:980px;margin:auto;padding:0 24px}
+header{background:linear-gradient(120deg,#fff,#e5f1ff);padding:42px 0 30px;border-bottom:1px solid var(--line)}
+.eyebrow{color:var(--blue);font-weight:700;font-size:13px;letter-spacing:.04em}h1{font-size:32px;line-height:1.3;margin:10px 0}
+.lead{color:var(--muted);margin:12px 0}
+.release-card{background:#fff;border:1px solid #c8dbf0;border-left:4px solid var(--blue);border-radius:12px;padding:18px 22px;margin-bottom:24px;font-size:14px}
+.release-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;font-size:11px;color:var(--muted)}
+.release-tag{background:#eaf6ec;color:#176b35;border-radius:16px;padding:3px 9px;font-weight:700}
+.release-title{font-size:18px;font-weight:700;line-height:1.5;margin:12px 0}
+.release-points{margin:10px 0}.release-points li{margin:5px 0}
+.release-footer{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 14px;border-top:1px solid var(--line);padding-top:10px;font-size:12px;color:var(--muted)}
+.architecture{margin:18px 0;background:#fff;border:1px solid #c8dbf0;border-radius:12px;padding:18px}
+.diagram-heading{margin:0 0 12px;font-size:16px;color:#245b8c}
+.zones{display:grid;grid-template-columns:minmax(0,1fr) 70px minmax(0,1.5fr);gap:10px;align-items:stretch}
+.zone{border-radius:11px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.zone-onprem{border:2px dashed #bb934c;background:#fff9ed}.zone-azure{border:1px solid #b8d2ed;background:#eef6ff}
+.zone-title{font-size:12px;font-weight:700}.zone-onprem .zone-title{color:#805f23}.zone-azure .zone-title{color:#245b8c}
+.arch-node{min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:12px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;text-align:center;overflow-wrap:anywhere}
+.arch-node strong{font-size:14px;line-height:1.4}.arch-node .meta{font-size:12px;line-height:1.5;color:var(--muted)}
+.node-entra{border-color:#0078d4}.node-foundry{background:#eefaf2;border-color:#8cc9a0}.node-issuer{background:#fdf6e8;border-color:#e3b877}
+.azure-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mid{display:flex;flex-direction:column;align-items:center;justify-content:center;color:#486782;font-size:11px;text-align:center;line-height:1.35;font-weight:700;gap:4px}
+.mid b{font-size:20px}
+.key-chip{font-size:11px;line-height:1.5;border:1px solid #c7d9ed;background:#eaf3ff;color:#24527f;border-radius:6px;padding:4px 7px;overflow-wrap:anywhere}
+.opt-chip{border-style:dashed;border-color:#bb934c;background:#fff9ed;color:#805f23}
+.architecture figcaption{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 16px;border-top:1px solid var(--line);margin-top:14px;padding-top:10px;font-size:11px;color:var(--muted)}
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}.badge{font-size:12px;padding:3px 10px;background:#fff;border:1px solid #c8dbf0;border-radius:20px}
+nav{display:flex;flex-wrap:wrap;gap:8px 18px;padding:22px 0;font-size:14px}nav a{text-decoration:none}nav a.core{font-weight:700;color:#7a4800}
+section{counter-increment:step;background:#fff;border:1px solid var(--line);border-radius:14px;padding:24px 28px;margin:0 0 18px;scroll-margin-top:18px}
+section.core{border:2px solid #e3b877;background:#fffdf8}
+section.lab{counter-increment:none;border:1px dashed #9aa7b5;background:#f9fbfd}
+h2{display:flex;align-items:center;flex-wrap:wrap;gap:10px 12px;font-size:21px;margin:0 0 14px;line-height:1.4}
+h2::before{content:counter(step,decimal-leading-zero);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:36px;height:36px;color:#fff;background:var(--blue);border-radius:9px;font-size:14px}
+section.core h2::before{background:#b36b00}
+.tag-core{font-size:11px;font-weight:700;background:#fdf1e1;color:#7a4800;border:1px solid #e3b877;border-radius:999px;padding:0 8px;line-height:1.7;white-space:nowrap}
+.tag-where{font-size:11px;font-weight:700;border-radius:999px;padding:0 8px;line-height:1.7;white-space:nowrap}
+.w-onprem{background:#fff4de;color:#805f23;border:1px solid #e3b877}.w-azure{background:#e6f0fb;color:#0b4f8a;border:1px solid #9cc3ea}.w-both{background:#efeaf8;color:#4b2f86;border:1px solid #b9a6e0}
+h3{font-size:17px;line-height:1.5;margin:24px 0 10px}
+p{margin:12px 0}li{margin:8px 0}ol,ul{padding-left:22px}.note{background:#eef6ff;border-left:3px solid var(--blue);border-radius:4px;padding:10px 14px;font-size:14px;color:#34465d}
+.warn{background:#fff9ed;border-left:3px solid #bb934c;border-radius:4px;padding:10px 14px;font-size:14px;color:#6b4e17}
+.done{color:#176b35;font-weight:700;font-size:14px}.small{font-size:13px;color:var(--muted)}
+.unv{background:#f3f4f6;color:#4b5563;border:1px solid #cbd2da;border-radius:999px;font-size:11px;padding:0 8px;font-weight:700;white-space:nowrap}
+code{background:#edf2f8;border-radius:4px;padding:2px 5px;font:.9em Consolas,monospace;overflow-wrap:anywhere}
+details{border:1px solid var(--line);border-radius:9px;padding:10px 14px;margin:14px 0}summary{cursor:pointer;color:var(--blue);font-weight:600;font-size:14px}
+pre{background:#142033;color:#e8f0ff;white-space:pre;overflow:auto;max-height:420px;padding:42px 14px 14px;border-radius:8px;font:12px/1.65 Consolas,monospace}
+pre code{background:none;padding:0;color:inherit;overflow-wrap:normal}
+.code-wrap{position:relative}.copy{position:absolute;top:9px;right:9px;background:#344760;border:1px solid #6c8099;color:white;border-radius:5px;padding:3px 10px;cursor:pointer}
+.lang{position:absolute;top:11px;left:14px;color:#b3c8e2;font:700 10px sans-serif;text-transform:uppercase}
+table{border-collapse:collapse;width:100%;font-size:14px;margin:12px 0}td,th{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;overflow-wrap:anywhere}th{color:var(--muted);font-weight:600;width:30%}
+table.match th,table.match td{width:auto}table.match thead th{background:#f3f7fc;color:var(--ink)}
+.hl{background:#5c3d00;color:#ffe2a8;font-weight:700;border-radius:3px;box-shadow:-4px 0 0 #ffb340,4px 0 0 #5c3d00}
+.wifbox{background:#fff3d6;border:2px solid #e3a02f;border-radius:10px;padding:12px 16px;margin:14px 0;font-size:14px;color:#5a3a00}.wifbox b.t{display:block;color:#7a4800;margin-bottom:4px}.wifbox table{margin:6px 0 0;font-size:13px}.wifbox th{width:auto;color:#5a3a00}
+footer{padding:20px 0 36px;font-size:12px;color:var(--muted)}footer a{margin-right:14px}
+@media(max-width:650px){.wrap{padding:0 16px}header{padding:28px 0 22px}h1{font-size:26px}section{padding:20px}h2{font-size:19px}.architecture{padding:14px}.zones{display:flex;flex-direction:column}.mid{flex-direction:row;min-height:30px}.azure-row{grid-template-columns:1fr}}
+@media print{details{break-inside:avoid}.copy{display:none}section{break-inside:avoid}body{background:white}}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+<aside class="release-card" aria-labelledby="release-title">
+<div class="release-meta"><span class="release-tag">관리 VM부터 Azure 실배포 End-to-End 검증 완료</span><span>검증일: <time datetime="2026-11-08">2026-11-08</time></span><span>랩 리전: East US 2</span></div>
+<div class="release-title" id="release-title">관리 VM 1대를 만드는 것부터 시작해, 같은 VM에 k3s를 설치하고 WIF로 Foundry 모델을 Keyless 호출하기까지 처음부터 끝까지 따라 하는 v4 가이드입니다.</div>
+<ul class="release-points">
+<li>흐름: 내 PC에서 관리 VM 생성 → VM에서 <code>az login</code> → Azure 리소스 → k3s(issuer 플래그 1개) → OIDC 공개 → federated credential → 파드 호출</li>
+<li>모든 명령은 CLI(Bash)이며, 아래 블록은 실제 Azure 구독에서 위에서 아래로 실행해 검증했습니다.</li>
+<li>관리 VM에는 <b>관리 ID를 붙이지 않습니다</b>. 온프레미스 서버처럼 Azure 신원이 없는 상태에서 WIF만으로 동작함을 보입니다.</li>
+</ul>
+<div class="release-footer"><span>저장소: <code>k8s_WIF_01</code></span><span>랩 모델: gpt-5.4-mini (GlobalStandard) · k3s v1.36</span></div>
+</aside>
+<div class="eyebrow">MANAGEMENT VM · K3S · MICROSOFT ENTRA ID · MICROSOFT FOUNDRY</div>
+<h1>관리 VM + k3s로 WIF Keyless Foundry 호출 따라 하기 (v4)</h1>
+<p class="lead">Azure 관리 VM 하나에서 Azure 리소스 생성, k3s 설치, WIF 연동, 검증까지 모두 진행합니다. 저장하는 비밀(API Key·Client Secret·인증서)은 없습니다.</p>
+<figure class="architecture" aria-labelledby="diagram-heading">
+<div class="diagram-heading" id="diagram-heading"><b>전체 구조</b></div>
+<div class="zones">
+<div class="zone zone-onprem"><div class="zone-title">관리 VM <code>vm-wif-mgmt</code> (온프레미스 역할 · 관리 ID 없음)</div>
+<div class="arch-node"><strong>k3s 클러스터</strong><span class="meta">API 서버 issuer 플래그 1개<br>projected SA 토큰 볼륨<br>파드 + SA <code>wif-sa</code></span><span class="key-chip">Secret 0개 · 키 없음</span></div>
+<div class="arch-node"><strong>az CLI (device code 로그인)</strong><span class="meta">Azure 리소스 생성·OIDC 업로드용<br>파드의 인증과는 별개</span></div></div>
+<div class="mid"><b>→</b>① SA 토큰<br>제시<br><b>←</b>② Entra<br>토큰<br><b>→</b>③ 모델<br>호출</div>
+<div class="zone zone-azure"><div class="zone-title">Azure / Microsoft 클라우드</div>
+<div class="azure-row">
+<div class="arch-node node-entra"><strong>Microsoft Entra ID</strong><span class="meta">UAMI + Federated credential<br>issuer · subject · audience 매칭</span></div>
+<div class="arch-node node-issuer"><strong>OIDC issuer 호스팅</strong><span class="meta">Storage 정적 웹사이트<br>discovery 문서 + JWKS</span><span class="key-chip opt-chip">Entra가 읽어 서명 검증</span></div></div>
+<div class="arch-node node-foundry"><strong>Microsoft Foundry</strong><span class="meta">모델 배포 · RBAC: Cognitive Services OpenAI User</span><span class="key-chip opt-chip">disableLocalAuth = true (API Key 비활성)</span></div></div>
+</div>
+<figcaption><span>NSG: 내 PC의 공인 IP에서 오는 SSH(22)만 허용</span><span>Entra가 접속하는 곳은 클러스터가 아니라 <b>issuer 호스팅</b>입니다</span></figcaption>
+</figure>
+<div class="badges"><span class="badge">관리 VM에서 시작</span><span class="badge">k3s</span><span class="badge">API 서버 플래그 1개</span><span class="badge">DefaultAzureCredential</span><span class="badge">API Key 비활성</span></div>
+</div></header>
+<main class="wrap">
+<nav aria-label="진행 순서"><a href="#easy-start">먼저 읽기</a><a href="#wif-map" class="core">★ WIF 신뢰 체인</a><a href="#s1">01 관리 VM</a><a href="#s2">02 VM 도구·로그인</a><a href="#s3">03 Azure 리소스</a><a href="#s4" class="core">04 k3s</a><a href="#s5" class="core">05 OIDC 공개</a><a href="#s6" class="core">06 Federated credential</a><a href="#s7">07 워크로드</a><a href="#s8">08 정리</a><a href="#trouble">문제 해결</a></nav>
+
+<aside class="release-card" aria-labelledby="easy-start">
+<h3 id="easy-start">먼저 읽기: 무엇을 만들고, 왜 필요한가요?</h3>
+<p>Azure 안의 VM·AKS는 관리 ID로 토큰을 받지만, 온프레미스 파드는 그럴 수 없어 보통 Client Secret이나 API Key를 Secret에 저장합니다. 이 가이드는 <b>클러스터가 서명한 토큰을 Entra ID가 직접 검증</b>하게 해 저장할 비밀을 없앱니다.</p>
+<table><tr><th>용어</th><td>이 구성에서 하는 일</td></tr>
+<tr><th>Workload Identity Federation (WIF)</th><td>외부 ID 공급자(여기서는 k3s)가 발급한 토큰을 Entra ID가 신뢰하고 Azure 액세스 토큰으로 교환해 주는 기능</td></tr>
+<tr><th>OIDC Issuer</th><td>“이 토큰은 내 클러스터가 서명했다”를 증명하는 공개 주소. Entra가 여기서 discovery 문서와 JWKS(공개키)를 읽음</td></tr>
+<tr><th>UAMI</th><td>파드가 가장할 Azure 쪽 ID. Foundry 권한을 가지며, VM에 붙이지 않고 <b>federated credential의 대상</b>으로만 사용</td></tr>
+<tr><th>Federated credential</th><td>UAMI에 붙이는 신뢰 규칙. issuer + subject + audience가 모두 일치하는 토큰만 교환</td></tr>
+<tr><th>Projected SA 토큰</th><td>파드 매니페스트의 <code>serviceAccountToken</code> 볼륨. audience가 <code>api://AzureADTokenExchange</code>인 토큰을 kubelet이 파일로 넣고 갱신. 앱은 <code>DefaultAzureCredential</code>만 호출</td></tr></table>
+<p><b>코드 블록 표시:</b> <span class="tag-where w-both">필수 Bash</span> 반드시 실행 · <span class="tag-where w-azure">검증 · 공통</span> 결과 확인 · <span class="tag-where w-onprem">조건부 실행</span> 해당될 때만 · <span class="hl" style="padding:0 6px">강조 줄</span> <b>WIF 신뢰 체인과 직접 관련된 설정</b>(다른 값으로 바꾸면 인증 실패)</p>
+<p class="note"><b>실행 위치:</b> 1단계 중 <b>1-1~1-3은 내 PC</b>(Bash, Azure CLI 로그인 필요), 1-4부터는 <b>관리 VM</b>입니다. <b>비용:</b> VM·Foundry 호출·Storage에 비용이 발생하므로 8단계에서 리소스 그룹을 삭제하세요.</p>
+</aside>
+
+<aside class="release-card" aria-labelledby="wif-map" style="border-left-color:#b36b00;background:#fffdf8">
+<h3 id="wif-map">★ WIF 신뢰 체인: 값 4개가 한 글자도 틀리지 않고 이어져야 합니다</h3>
+<p>표의 같은 행은 <b>문자 단위로 동일</b>해야 하며, 틀리면 Entra가 교환을 거부합니다. 4~6단계가 이 연결을 만듭니다.</p>
+<table class="match"><thead><tr><th>값</th><th>토큰이 가진 값 (k3s 발급)</th><th>Entra에 등록한 값</th><th>설정 단계</th></tr></thead>
+<tr><td><b>Issuer</b></td><td><code>iss</code> = API 서버 <code>service-account-issuer</code></td><td><code>issuer</code></td><td>4단계 ↔ 6단계</td></tr>
+<tr><td><b>Subject</b></td><td><code>sub</code> = <code>system:serviceaccount:&lt;ns&gt;:&lt;SA&gt;</code></td><td><code>subject</code></td><td>7단계 ↔ 6단계</td></tr>
+<tr><td><b>Audience</b></td><td><code>aud</code> = <code>api://AzureADTokenExchange</code></td><td><code>audiences</code></td><td>7단계 ↔ 6단계</td></tr>
+<tr><td><b>서명 키</b></td><td>헤더 <code>kid</code> + RS256 서명</td><td>issuer의 JWKS(공개키)</td><td>4단계 ↔ 5단계</td></tr></table>
+</aside>
+
+<section id="s1"><h2>관리 VM 생성·접속 <span class="tag-where w-both">내 PC → 관리 VM</span></h2>
+<p>이 VM이 k3s 호스트이자 Azure 작업용 관리 서버입니다. <b>관리 ID를 일부러 붙이지 않습니다</b>(<code>--assign-identity</code> 미사용).</p>
+<h3>1-1. 리소스 그룹·네트워크·VM 생성 <span class="tag-where w-both">필수 Bash · 내 PC</span></h3>
+<pre data-lang="bash"><code>az login   # 내 PC에서 Azure 로그인(이미 했다면 생략)
+az account set --subscription "&lt;구독 ID&gt;"
+# Windows Git Bash에서는 /subscriptions/... 경로 변환을 막습니다
+export MSYS_NO_PATHCONV=1
+
+SUFFIX=$(printf '%05x' $((RANDOM * RANDOM % 1048576)))   # 전역 고유 이름용 접미사
+RG=rg-wif-v4-$SUFFIX; LOC=eastus2
+VM=vm-wif-mgmt; VNET=vnet-wif-lab; NSG=nsg-wif-mgmt; PIP=pip-wif-mgmt
+DNS_LABEL=wifmgmt$SUFFIX; ADMIN=azureuser
+mkdir -p ~/v4
+echo "export SUFFIX=$SUFFIX RG=$RG LOC=$LOC VM=$VM DNS_LABEL=$DNS_LABEL ADMIN=$ADMIN" &gt; ~/v4/pc.env
+
+az group create -n $RG -l $LOC -o none
+az network nsg create -g $RG -n $NSG -o none
+az network vnet create -g $RG -n $VNET --address-prefixes 10.20.0.0/16 \
+  --subnet-name default --subnet-prefixes 10.20.0.0/24 --network-security-group $NSG -o none
+az network public-ip create -g $RG -n $PIP --sku Standard --allocation-method Static \
+  --dns-name $DNS_LABEL -o none
+az network nic create -g $RG -n nic-wif-mgmt --vnet-name $VNET --subnet default \
+  --public-ip-address $PIP --network-security-group $NSG -o none
+az vm create -g $RG -n $VM -l $LOC --image Ubuntu2204 --size Standard_D2s_v7 \
+  --admin-username $ADMIN --generate-ssh-keys --nics nic-wif-mgmt -o none</code></pre>
+<p class="small">VM SKU 제한(<code>SkuNotAvailable</code>)이 나오면 <code>--size</code>를 가용한 2 vCPU급으로 바꾸세요. 구독 정책이 NSG 규칙을 삭제하면 1-2를 다시 실행합니다.</p>
+<h3>1-2. 내 PC에서 오는 SSH만 허용 <span class="tag-where w-both">필수 Bash · 내 PC</span></h3>
+<pre data-lang="bash"><code>MY_IP=$(curl -s https://api.ipify.org)
+az network nsg rule create -g $RG --nsg-name $NSG -n allow-ssh-from-my-pc --priority 1000 \
+  --access Allow --protocol Tcp --direction Inbound --source-address-prefixes $MY_IP/32 \
+  --destination-port-ranges 22 -o none
+FQDN=$(az network public-ip show -g $RG -n $PIP --query dnsSettings.fqdn -o tsv)
+echo "export FQDN=$FQDN" &gt;&gt; ~/v4/pc.env
+echo "$FQDN"</code></pre>
+<h3>1-3. 관리 ID가 없음을 확인 <span class="tag-where w-azure">검증 · 공통</span></h3>
+<pre data-lang="bash"><code>az vm show -g $RG -n $VM --query identity -o json     # null 이어야 함</code></pre>
+<p class="done">완료 확인: 출력이 <code>null</code>.</p>
+<h3>1-4. SSH 접속 <span class="tag-where w-both">필수 Bash</span></h3>
+<pre data-lang="bash"><code>source ~/v4/pc.env
+ssh $ADMIN@$FQDN</code></pre>
+<p>이후 2~7단계의 명령은 <b>모두 이 SSH 세션(관리 VM) 안에서</b> 실행합니다.</p>
+</section>
+
+<section id="s2"><h2>VM 도구 설치 · Azure 로그인 <span class="tag-where w-onprem">관리 VM</span></h2>
+<h3>2-1. 도구 설치 <span class="tag-where w-both">필수 Bash</span></h3>
+<pre data-lang="bash"><code>sudo apt-get update -qq
+sudo apt-get install -y -qq jq python3-pip &gt;/dev/null
+curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash &gt;/dev/null 2&gt;&amp;1
+az version --query '"azure-cli"' -o tsv</code></pre>
+<h3>2-2. VM에는 Azure 신원이 없음을 확인 <span class="tag-where w-azure">검증 · 공통</span></h3>
+<pre data-lang="bash"><code>curl -s -H Metadata:true --max-time 3 \
+  "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&amp;resource=https://management.azure.com/"</code></pre>
+<p class="done">완료 확인: <code>{"error":"invalid_request","error_description":"Identity not found"}</code> — 온프레미스 서버와 같은 상태입니다.</p>
+<h3>2-3. 관리자 로그인 (device code) <span class="tag-where w-both">필수 Bash</span></h3>
+<pre data-lang="bash"><code>az login --use-device-code
+az account set --subscription "&lt;구독 ID&gt;"
+az account show --query "{sub:id,tenant:tenantId}" -o json</code></pre>
+<p>출력된 코드로 브라우저(내 PC)에서 로그인합니다. 이 로그인은 <b>리소스를 만드는 관리자 자격</b>이며, 파드가 Foundry를 호출할 때는 쓰이지 않습니다.</p>
+</section>
+
+<section id="s3"><h2>Azure 리소스 생성 <span class="tag-where w-azure">Azure</span></h2>
+<p>UAMI, API Key가 꺼진 Foundry + 모델 배포, 호출 권한, OIDC 공개용 Storage를 만듭니다.</p>
+<div class="wifbox"><b class="t">🔑 WIF 설정 포인트</b>UAMI의 <b>Foundry 역할 할당</b>(<code>Cognitive Services OpenAI User</code>)과 <b>Storage 공개 접근</b>(Entra가 issuer를 읽어야 함)이 WIF가 끝까지 동작하기 위한 전제입니다. UAMI의 <code>CLIENT_ID</code>는 7단계에서 사용합니다.</div>
+<h3>3-1. 변수 파일 <span class="tag-where w-both">필수 Bash</span></h3>
+<pre data-lang="bash"><code># 1-1에서 정한 값과 같은 RG·SUFFIX를 사용합니다
+cat &gt; ~/wif.env &lt;&lt;'EOF'
+export RG=rg-wif-v4-&lt;SUFFIX&gt; LOC=eastus2 SUFFIX=&lt;SUFFIX&gt;
+export FOUNDRY=foundry-wif-&lt;SUFFIX&gt; MODEL=gpt-5.4-mini MODEL_VER=2026-03-17 ST=stwif&lt;SUFFIX&gt;
+EOF
+source ~/wif.env
+SUB=$(az account show --query id -o tsv)
+TENANT_ID=$(az account show --query tenantId -o tsv)
+echo "export SUB=$SUB TENANT_ID=$TENANT_ID" &gt;&gt; ~/wif.env</code></pre>
+<p class="small"><code>&lt;SUFFIX&gt;</code>를 1-1의 값으로 바꾸세요(소문자·숫자). 모델·버전이 폐기되었으면 <code>az cognitiveservices model list -l $LOC</code>로 확인해 변경합니다.</p>
+<h3>3-2. UAMI · Foundry · 모델 · 권한 <span class="tag-where w-both">필수 Bash</span></h3>
+<pre data-lang="bash"><code>source ~/wif.env
+az identity create -g $RG -n id-wif-demo -o none
+CLIENT_ID=$(az identity show -g $RG -n id-wif-demo --query clientId -o tsv)
+PRINCIPAL_ID=$(az identity show -g $RG -n id-wif-demo --query principalId -o tsv)
+echo "export CLIENT_ID=$CLIENT_ID PRINCIPAL_ID=$PRINCIPAL_ID" &gt;&gt; ~/wif.env
+
+# Foundry: API Key 비활성(disableLocalAuth). CLI 대신 ARM PUT 사용
+az rest --method put -o none \
+  --url "https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.CognitiveServices/accounts/$FOUNDRY?api-version=2025-06-01" \
+  --body "{\"location\":\"$LOC\",\"kind\":\"AIServices\",\"sku\":{\"name\":\"S0\"},\"properties\":{\"customSubDomainName\":\"$FOUNDRY\",\"publicNetworkAccess\":\"Enabled\",\"disableLocalAuth\":true}}"
+until [ "$(az cognitiveservices account show -g $RG -n $FOUNDRY --query properties.provisioningState -o tsv)" = Succeeded ]; do sleep 10; done
+FOUNDRY_ID=$(az cognitiveservices account show -g $RG -n $FOUNDRY --query id -o tsv)
+az cognitiveservices account deployment create -g $RG -n $FOUNDRY --deployment-name $MODEL \
+  --model-name $MODEL --model-version $MODEL_VER --model-format OpenAI --sku-name GlobalStandard --sku-capacity 10 -o none
+echo "export FOUNDRY_ID=$FOUNDRY_ID" &gt;&gt; ~/wif.env
+
+# UAMI에 Foundry 호출 권한
+az role assignment create --assignee-object-id $PRINCIPAL_ID --assignee-principal-type ServicePrincipal \
+  <span class="hl">--role "Cognitive Services OpenAI User" --scope $FOUNDRY_ID -o none</span></code></pre>
+<p class="warn">역할 전파에 최대 15분이 걸릴 수 있습니다. 그 전에는 7단계 파드가 401을 받으며, 기다린 뒤 다시 실행하면 됩니다.</p>
+<h3>3-3. OIDC 공개용 Storage 정적 웹사이트 <span class="tag-where w-both">필수 Bash</span></h3>
+<pre data-lang="bash"><code>az storage account create -g $RG -n $ST -l $LOC --sku Standard_LRS --allow-shared-key-access false -o none
+SA_ID=$(az storage account show -g $RG -n $ST --query id -o tsv)
+az role assignment create --assignee-object-id $(az ad signed-in-user show --query id -o tsv) \
+  --assignee-principal-type User --role "Storage Blob Data Contributor" --scope $SA_ID -o none
+for i in $(seq 1 20); do
+  az storage blob service-properties update --account-name $ST --static-website --index-document index.html --auth-mode login -o none 2&gt;/dev/null &amp;&amp; break
+  echo "역할 전파 대기($i)"; sleep 30
+done
+ISSUER_URL=$(az storage account show -g $RG -n $ST --query primaryEndpoints.web -o tsv | sed 's:/*$::')
+echo "export ISSUER_URL=$ISSUER_URL" &gt;&gt; ~/wif.env
+az storage account show -g $RG -n $ST --query "{pna:publicNetworkAccess,acl:networkRuleSet.defaultAction}" -o tsv</code></pre>
+<p class="done">완료 확인: 마지막 줄이 <code>Enabled  Allow</code>. <code>Disabled</code>이면 아래 조건부 블록을 실행합니다.</p>
+<h3>3-4. 구독 정책이 Storage 공개 접근을 막을 때 <span class="tag-where w-onprem">조건부 실행</span></h3>
+<p>관리 그룹 정책이 <code>publicNetworkAccess=Disabled</code>를 강제하면 Entra가 issuer를 읽을 수 없습니다. 이 랩에서는 리소스 그룹 범위 정책 예외(1일 만료)로 우회했습니다. <b>정책 예외는 조직 거버넌스에 맞게 승인받은 뒤</b> 사용하세요.</p>
+<pre data-lang="bash"><code>source ~/wif.env
+POLICY_ASSIGNMENT_ID=$(az rest --method get \
+  --url "https://management.azure.com/subscriptions/$SUB/providers/Microsoft.Authorization/policyAssignments?api-version=2022-06-01" \
+  --query "value[?name=='MCAPSGovDeployPolicies'].id|[0]" -o tsv)   # 이름은 환경마다 다름
+az policy exemption create --name wif-demo-storage --policy-assignment "$POLICY_ASSIGNMENT_ID" \
+  --exemption-category Waiver --resource-group $RG \
+  --expires-on "$(date -u -d '+1 day' +%Y-%m-%dT%H:%M:%SZ)" --query name -o tsv
+sleep 75   # 예외 반영 대기
+az storage account update -g $RG -n $ST --public-network-access Enabled --default-action Allow \
+  --query "{pna:publicNetworkAccess,acl:networkRuleSet.defaultAction}" -o tsv</code></pre>
+</section>
+
+<section id="s4" class="core"><h2>k3s 설치: API 서버 issuer 플래그 1개 <span class="tag-core">WIF 핵심 ①</span> <span class="tag-where w-onprem">관리 VM</span></h2>
+<p>k3s 설치 시 <code>service-account-issuer</code>를 3단계에서 만든 공개 URL로 지정합니다. 이 값이 ServiceAccount 토큰의 <code>iss</code>가 됩니다.</p>
+<div class="wifbox"><b class="t">🔑 WIF 설정 포인트</b>강조된 줄 <code>service-account-issuer</code> 값 = 토큰의 <b>Issuer</b> = 6단계 <code>--issuer</code>. 끝에 <code>/</code>를 붙이거나 <code>http</code>로 쓰는 등 한 글자만 달라도 <code>AADSTS700211</code>이 납니다.</div>
+<p class="note"><b>왜 하나요?</b> Entra는 토큰의 <code>iss</code> 주소로 찾아가 서명 검증용 공개키를 가져옵니다. 기본값(<code>https://kubernetes.default.svc</code>)은 외부에서 접근할 수 없으므로, 외부에서 읽을 수 있는 URL로 바꿔야 합니다. API 서버가 이 값으로 토큰을 서명하며, 개인키는 클러스터 밖으로 나가지 않습니다. <b>토큰이 발급되기 전에 설정해야 하며</b>, 이미 발급된 토큰의 <code>iss</code>는 바뀌지 않습니다.</p>
+<pre data-lang="bash"><code>source ~/wif.env
+sudo mkdir -p /etc/rancher/k3s
+sudo tee /etc/rancher/k3s/config.yaml &gt;/dev/null &lt;&lt;EOF
+write-kubeconfig-mode: "0644"
+kube-apiserver-arg:
+<span class="hl">  - "service-account-issuer=${ISSUER_URL}"</span>
+EOF
+# GitHub 릴리스 다운로드가 일시적으로 504를 내므로 재시도하고, 설치 로그는 파일로 남깁니다
+for i in 1 2 3 4 5; do
+  curl -sfL https://get.k3s.io | INSTALL_K3S_CHANNEL=v1.36 sudo -E sh - &gt;/tmp/k3s-install.log 2&gt;&amp;1 &amp;&amp; break
+  echo "k3s 설치 재시도($i): $(tail -1 /tmp/k3s-install.log)"; sleep 20
+done
+mkdir -p ~/.kube &amp;&amp; sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config &amp;&amp; sudo chown $(id -u):$(id -g) ~/.kube/config
+echo 'export KUBECONFIG=$HOME/.kube/config' &gt;&gt; ~/wif.env
+export KUBECONFIG=$HOME/.kube/config
+until kubectl get nodes 2&gt;/dev/null | grep -q ' Ready'; do sleep 3; done
+kubectl get nodes
+kubectl get --raw /.well-known/openid-configuration; echo</code></pre>
+<p class="done">완료 확인: 노드 <code>Ready</code>, 그리고 discovery 문서의 <code>issuer</code>가 <code>ISSUER_URL</code>과 같음(<code>jwks_uri</code>는 내부 주소로 보이는 것이 정상이며 5단계에서 해결).</p>
+</section>
+
+<section id="s5" class="core"><h2>OIDC 메타데이터 공개 <span class="tag-core">WIF 핵심 ②</span> <span class="tag-where w-azure">관리 VM → Storage</span></h2>
+<p>API 서버의 공개키(JWKS)를 가져오고, <code>jwks_uri</code>가 공개 주소를 가리키는 discovery 문서를 직접 만들어 함께 업로드합니다. 경로와 <code>Content-Type: application/json</code>이 중요합니다.</p>
+<div class="wifbox"><b class="t">🔑 WIF 설정 포인트</b><table><tr><th>강조 줄</th><td>의미</td></tr><tr><th><code>issuer</code></th><td>4단계 issuer와 동일해야 함</td></tr><tr><th><code>jwks_uri</code></th><td>Entra가 공개키를 가져가는 공개 주소(내부 주소 불가)</td></tr><tr><th>업로드 경로</th><td><code>.well-known/openid-configuration</code>, <code>openid/v1/jwks</code> 고정</td></tr></table></div>
+<p class="note"><b>왜 하나요?</b> Entra는 <code>&lt;issuer&gt;/.well-known/openid-configuration</code>을 읽고, 그 안의 <code>jwks_uri</code>에서 공개키를 가져와 토큰 서명을 검증합니다. k3s가 만드는 discovery 문서는 <code>jwks_uri</code>가 내부 주소(<code>https://10.x.x.x:6443/...</code>)라서 그대로 올리면 Entra가 읽지 못합니다. 그래서 discovery 문서는 직접 만들고, JWKS는 API 서버에서 가져옵니다. <b>공개키만 올라가며</b> 개인키는 업로드되지 않습니다. 서명 키가 바뀌면(클러스터 재구축 등) JWKS를 다시 올려야 합니다.</p>
+<pre data-lang="bash"><code>source ~/wif.env
+mkdir -p ~/oidc &amp;&amp; cd ~/oidc
+kubectl get --raw /openid/v1/jwks &gt; jwks.json
+cat &gt; openid-configuration &lt;&lt;EOF
+{
+<span class="hl">  "issuer": "$ISSUER_URL",</span>
+<span class="hl">  "jwks_uri": "$ISSUER_URL/openid/v1/jwks",</span>
+  "response_types_supported": ["id_token"],
+  "subject_types_supported": ["public"],
+  "id_token_signing_alg_values_supported": ["RS256"]
+}
+EOF
+az storage blob upload --account-name $ST --auth-mode login -c '$web' \
+  -f openid-configuration -n .well-known/openid-configuration --content-type application/json --overwrite -o none
+az storage blob upload --account-name $ST --auth-mode login -c '$web' \
+  -f jwks.json -n openid/v1/jwks --content-type application/json --overwrite -o none</code></pre>
+<h3>5-1. 공개 문서와 토큰 대조 <span class="tag-where w-azure">검증 · 공통</span></h3>
+<pre data-lang="bash"><code>curl -fsS $ISSUER_URL/.well-known/openid-configuration; echo
+PUB_KIDS=$(curl -fsS $ISSUER_URL/openid/v1/jwks | jq -r '.keys[].kid')
+TOKEN=$(kubectl -n default create token default --audience api://AzureADTokenExchange)
+TOKEN_ISS=$(echo "$TOKEN" | cut -d. -f2 | tr '_-' '/+' | awk '{print $0 "=="}' | base64 -d 2&gt;/dev/null | jq -r .iss)
+TOKEN_KID=$(echo "$TOKEN" | cut -d. -f1 | tr '_-' '/+' | awk '{print $0 "=="}' | base64 -d 2&gt;/dev/null | jq -r .kid)
+echo "token iss=$TOKEN_ISS"; echo "token kid=$TOKEN_KID"; echo "public kids=$PUB_KIDS"
+[ "$TOKEN_ISS" = "$ISSUER_URL" ] &amp;&amp; echo "$PUB_KIDS" | grep -qx "$TOKEN_KID" &amp;&amp; echo "OK: iss/kid 일치"</code></pre>
+<p class="done">완료 확인: <code>OK: iss/kid 일치</code>.</p>
+</section>
+
+<section id="s6" class="core"><h2>Federated credential 생성 <span class="tag-core">WIF 핵심 ③ · 가장 중요</span> <span class="tag-where w-azure">Azure</span></h2>
+<p>UAMI에 “이 issuer가 서명한, 이 ServiceAccount의 토큰을 신뢰한다”는 규칙을 등록합니다.</p>
+<div class="wifbox"><b class="t">🔑 WIF 설정 포인트: 신뢰 체인의 핵심</b><table><tr><th>옵션</th><td>반드시 일치해야 하는 값</td></tr><tr><th><code>--issuer</code></th><td>4단계 <code>ISSUER_URL</code></td></tr><tr><th><code>--subject</code></th><td><code>system:serviceaccount:&lt;네임스페이스&gt;:&lt;SA 이름&gt;</code> — 7단계 <code>wif-demo</code>/<code>wif-sa</code></td></tr><tr><th><code>--audiences</code></th><td><code>api://AzureADTokenExchange</code> — 7단계 projected 볼륨 audience</td></tr></table></div>
+<p class="note"><b>왜 하나요?</b> Entra는 <b>issuer + subject + audience</b>가 모두 일치하는 토큰에만 UAMI의 액세스 토큰을 발급합니다. subject를 특정 ServiceAccount로 좁혔기 때문에 같은 클러스터의 다른 파드나 다른 SA는 이 ID를 사용할 수 없습니다. 이 규칙이 Client Secret이나 인증서를 대신합니다. 등록 후 <code>az identity federated-credential list -g $RG --identity-name id-wif-demo -o table</code>로 확인할 수 있습니다.</p>
+<pre data-lang="bash"><code>source ~/wif.env
+az identity federated-credential create -g $RG --identity-name id-wif-demo -n fic-onprem-wif-sa \
+<span class="hl">  --issuer "$ISSUER_URL" --subject "system:serviceaccount:wif-demo:wif-sa" \</span>
+<span class="hl">  --audiences api://AzureADTokenExchange --query "{issuer:issuer,subject:subject}" -o json</span></code></pre>
+<p class="warn"><code>subject</code>의 네임스페이스·SA 이름(<code>wif-demo</code>, <code>wif-sa</code>)은 7단계 매니페스트와 문자 단위로 같아야 합니다. 다르면 <code>AADSTS700213</code>이 납니다.</p>
+</section>
+
+<section id="s7"><h2>워크로드 배포: 토큰 주입 + Foundry 호출 <span class="tag-where w-onprem">관리 VM (k3s)</span></h2>
+<p>Namespace, ServiceAccount, 호출 코드, Job을 한 번에 적용합니다. <b>webhook 없이</b> projected 볼륨과 환경변수 4개로 <code>DefaultAzureCredential</code>이 토큰을 읽습니다. Secret은 만들지 않습니다.</p>
+<div class="wifbox"><b class="t">🔑 WIF 설정 포인트</b>매니페스트에서 강조된 줄이 WIF 연결에 쓰입니다. <b>SA 이름·네임스페이스</b>(= Subject), projected 볼륨의 <b>audience</b>, 그리고 <code>AZURE_CLIENT_ID</code>(UAMI) · <code>AZURE_TENANT_ID</code> · <code>AZURE_FEDERATED_TOKEN_FILE</code>(토큰 파일 경로, 볼륨 마운트 경로와 일치) 환경변수입니다. 이 값들만 있으면 <code>DefaultAzureCredential</code>이 federated 토큰을 자동으로 사용합니다.</div>
+<p class="note"><b>동작 순서:</b> ① kubelet이 audience <code>api://AzureADTokenExchange</code>인 SA 토큰을 파일(<code>azure-identity-token</code>)로 주입하고 주기적으로 갱신 → ② <code>DefaultAzureCredential</code>이 환경변수(<code>AZURE_FEDERATED_TOKEN_FILE</code> 등)를 보고 그 토큰을 Entra에 제시 → ③ Entra가 5단계의 공개키로 서명을 검증하고 6단계 규칙과 대조한 뒤 액세스 토큰 발급 → ④ 그 토큰으로 Foundry 호출. 앱 코드에는 비밀 값이 없습니다.</p>
+<pre data-lang="bash"><code>kubectl apply -f - &lt;&lt;EOF
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wif-demo
+---
+# 1) ServiceAccount: Subject(6단계) — 어노테이션 불필요
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+<span class="hl">  name: wif-sa</span>
+<span class="hl">  namespace: wif-demo</span>
+---
+# 2) 예제 앱 코드 (아래 "앱 핵심 코드"와 동일)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wif-app
+  namespace: wif-demo
+data:
+  call.py: |
+    import os
+    from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+    from openai import AzureOpenAI
+    credential = DefaultAzureCredential()
+    token_provider = get_bearer_token_provider(
+        credential, "https://cognitiveservices.azure.com/.default")
+    client = AzureOpenAI(azure_endpoint=os.environ["FOUNDRY_ENDPOINT"], api_version="2024-10-21",
+                         azure_ad_token_provider=token_provider)
+    r = client.chat.completions.create(model=os.environ["FOUNDRY_DEPLOYMENT"], max_completion_tokens=500,
+        messages=[{"role": "user", "content": "한국어로 짧게 인사해 주세요."}])
+    print(r.choices[0].message.content)
+---
+# 3) Job: projected 토큰 볼륨 + AZURE_* 환경변수
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wif-call
+  namespace: wif-demo
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+<span class="hl">      serviceAccountName: wif-sa</span>
+      restartPolicy: Never
+      containers:
+        - name: demo
+          image: python:3.12-slim
+          command: ["sh", "-c", "pip install -q azure-identity openai &amp;&amp; python /app/call.py"]
+          env:
+            - name: FOUNDRY_ENDPOINT
+              value: "https://$FOUNDRY.openai.azure.com"
+            - name: FOUNDRY_DEPLOYMENT
+              value: "$MODEL"
+<span class="hl">            - name: AZURE_CLIENT_ID</span>
+<span class="hl">              value: "$CLIENT_ID"</span>
+<span class="hl">            - name: AZURE_TENANT_ID</span>
+<span class="hl">              value: "$TENANT_ID"</span>
+            - name: AZURE_AUTHORITY_HOST
+              value: "https://login.microsoftonline.com/"
+<span class="hl">            - name: AZURE_FEDERATED_TOKEN_FILE</span>
+<span class="hl">              value: /var/run/secrets/azure/tokens/azure-identity-token</span>
+          volumeMounts:
+            - name: app
+              mountPath: /app
+            - name: azure-identity-token
+              mountPath: /var/run/secrets/azure/tokens
+              readOnly: true
+      volumes:
+        - name: app
+          configMap:
+            name: wif-app
+        - name: azure-identity-token
+          projected:
+            sources:
+<span class="hl">              - serviceAccountToken:</span>
+<span class="hl">                  audience: api://AzureADTokenExchange</span>
+                  expirationSeconds: 3600
+<span class="hl">                  path: azure-identity-token</span>
+EOF
+
+kubectl -n wif-demo wait --for=condition=complete job/wif-call --timeout=300s
+kubectl -n wif-demo logs job/wif-call</code></pre>
+<p class="done">완료 확인: 로그에 모델의 한국어 인사가 나오고, <code>kubectl -n wif-demo get secrets</code>가 <code>No resources found</code>입니다. 401이 나오면 3-2의 역할 전파(최대 15분)를 기다린 뒤 <code>kubectl delete ns wif-demo</code> 후 다시 적용하세요.</p>
+</section>
+
+<section id="s8"><h2>정리 · 참고 <span class="tag-where w-both">내 PC</span></h2>
+<h3>8-1. 리소스 삭제 <span class="tag-where w-both">필수 Bash</span></h3>
+<p>VM에서 나온 뒤(<code>exit</code>) 내 PC에서 실행합니다. 리소스 그룹 삭제로 VM·Foundry·Storage·UAMI·정책 예외가 함께 사라집니다.</p>
+<pre data-lang="bash"><code>source ~/v4/pc.env
+az group delete -n $RG --yes --no-wait
+az group exists -n $RG      # 삭제 완료 후 false</code></pre>
+<h3>8-2. 방화벽 허용 도메인 (참고) <span class="tag-where w-onprem">조건부 실행</span></h3>
+<p>클러스터가 egress를 제한하는 환경에서 파드가 열어야 할 곳입니다(egress 제한 환경 E2E는 이 랩에서 검증하지 않았습니다).</p>
+<table><tr><th>도메인 (443)</th><td>용도</td></tr>
+<tr><th><code>login.microsoftonline.com</code></th><td><b>필수.</b> Entra 토큰 교환</td></tr>
+<tr><th><code>&lt;Foundry&gt;.openai.azure.com</code></th><td><b>필수.</b> 모델 호출 (사용 엔드포인트에 따라 <code>*.cognitiveservices.azure.com</code>, <code>*.services.ai.azure.com</code>)</td></tr>
+<tr><th><code>mcr.microsoft.com</code>, <code>pypi.org</code>, <code>files.pythonhosted.org</code></th><td>조건부. 이 랩의 Job 이미지·패키지 설치에 사용(사설 레지스트리·미러를 쓰면 불필요)</td></tr>
+<tr><th><code>login.microsoftonline.us</code> 등</th><td>조건부. 소버린 클라우드 사용 시</td></tr></table>
+<p class="small">Entra가 읽는 issuer(<code>*.web.core.windows.net</code>)는 Entra 쪽에서 접속하므로 클러스터 egress 대상이 아닙니다.</p>
+</section>
+
+<section id="trouble"><h2>문제 해결</h2>
+<table>
+<tr><th>증상</th><td>원인 · 조치</td></tr>
+<tr><th><code>AADSTS700213</code></th><td>subject 불일치. 파드 토큰의 <code>sub</code>(<code>system:serviceaccount:&lt;ns&gt;:&lt;SA&gt;</code>)와 6단계 <code>subject</code>를 비교(<code>kubectl -n wif-demo create token wif-sa --audience api://AzureADTokenExchange</code>의 payload 확인)</td></tr>
+<tr><th><code>AADSTS700211</code></th><td>issuer 불일치/비공개. 5-1 대조, <code>az identity federated-credential list</code>로 issuer 확인, Storage 공개 접근 확인(3-4)</td></tr>
+<tr><th>파드 401 (<code>lacks the required data action</code>)</th><td>역할 전파 지연(최대 15분). 대기 후 재시도</td></tr>
+<tr><th>k3s 설치 <code>[ERROR] Download failed</code> / 504</th><td>GitHub 일시 오류. 4단계의 재시도 루프 사용, <code>/tmp/k3s-install.log</code> 확인</td></tr>
+<tr><th><code>kubectl wait</code>가 <code>no matching resources found</code></th><td>설치 직후 노드 미등록. 4단계처럼 <code>until kubectl get nodes ... Ready</code> 대기 후 사용</td></tr>
+<tr><th>Storage <code>KeyBasedAuthenticationNotPermitted</code></th><td>공유 키 금지 정책. <code>--auth-mode login</code> + Blob Data Contributor 역할 사용(전파 수 분)</td></tr>
+<tr><th>Foundry 생성 시 <code>PublicNetworkAccess is required</code></th><td>3-2처럼 CLI 대신 ARM PUT</td></tr>
+<tr><th>SSH 타임아웃</th><td>내 공인 IP 변경 또는 정책이 NSG 규칙 삭제. 1-2 재실행</td></tr>
+<tr><th>Git Bash에서 <code>/subscriptions/...</code> 오류</th><td><code>MSYS_NO_PATHCONV=1</code> 설정</td></tr></table>
+</section>
+</main>
+<footer><div class="wrap"><a href="https://learn.microsoft.com/entra/workload-id/workload-identity-federation" target="_blank" rel="noopener">Workload Identity Federation</a><a href="https://azure.github.io/azure-workload-identity/" target="_blank" rel="noopener">Azure Workload Identity</a><a href="https://learn.microsoft.com/azure/ai-foundry/" target="_blank" rel="noopener">Microsoft Foundry</a></div></footer>
+<script>
+document.querySelectorAll('pre').forEach(function(pre){
+  var text=pre.textContent.replace(/\s+$/,'')+(pre.dataset.lang==='bash'?'\n':'');
+  var wrap=document.createElement('div');wrap.className='code-wrap';pre.before(wrap);wrap.appendChild(pre);
+  var lang=document.createElement('span');lang.className='lang';lang.textContent=pre.dataset.lang||'text';wrap.appendChild(lang);
+  var button=document.createElement('button');button.type='button';button.className='copy';button.textContent='복사';button.setAttribute('aria-live','polite');wrap.appendChild(button);
+  function ok(){button.textContent='복사됨';setTimeout(function(){button.textContent='복사'},1600)}
+  function fallback(){var field=document.createElement('textarea');field.value=text;field.style.position='fixed';field.style.opacity='0';document.body.appendChild(field);field.select();try{if(document.execCommand('copy')){ok()}else{button.textContent='직접 선택해 복사하세요'}}catch(error){button.textContent='직접 선택해 복사하세요'}finally{field.remove()}}
+  button.onclick=function(){if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(ok,fallback)}else{fallback()}};
+});
+</script>
+</body>
+</html>
